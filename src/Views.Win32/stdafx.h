@@ -56,6 +56,7 @@ extern "C"
 #include <ranges>
 #include <set>
 #include <cwctype>
+#include <WinDarkMode.h>
 using Microsoft::WRL::ComPtr;
 #pragma warning(pop)
 

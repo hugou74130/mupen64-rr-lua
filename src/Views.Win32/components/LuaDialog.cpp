@@ -277,6 +277,7 @@ static void create_placeholder_dialog(t_dialog_state &dlg)
                               {{dlg.placeholder_hwnd, ResizeAnchor::FULL_ANCHOR | ResizeAnchor::INVALIDATE_ERASE}});
     ResizeAnchor::add_anchors(dlg.placeholder_hwnd, {{GetDlgItem(dlg.placeholder_hwnd, IDC_STATIC),
                                                       ResizeAnchor::FULL_ANCHOR | ResizeAnchor::INVALIDATE_ERASE}});
+    WinDarkMode::attach(dlg.placeholder_hwnd);
 }
 
 /**
@@ -330,6 +331,7 @@ static INT_PTR CALLBACK lua_instance_dialog_proc(HWND hwnd, UINT msg, WPARAM wpa
                                             {GetDlgItem(hwnd, IDC_BROWSE), ResizeAnchor::AnchorFlags::Right},
                                             {GetDlgItem(hwnd, IDC_LOG), ResizeAnchor::FULL_ANCHOR},
                                         });
+        WinDarkMode::attach(hwnd);
         break;
     case WM_DESTROY:
         ctx->hwnd = nullptr;
@@ -467,6 +469,7 @@ static INT_PTR CALLBACK lua_manager_dialog_proc(HWND hwnd, UINT msg, WPARAM wpar
 
         create_placeholder_dialog(g_dlg);
 
+        WinDarkMode::attach(hwnd);
         return TRUE;
     }
     case WM_CLOSE:

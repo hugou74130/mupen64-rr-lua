@@ -490,6 +490,13 @@ void on_fullscreen_changed(std::any data)
 void on_config_loaded(std::any)
 {
     RomBrowser::build();
+    
+    WinDarkMode::Theme theme = WinDarkMode::Theme::System;
+    if (g_config.theme == 0)
+        theme = WinDarkMode::Theme::Light;
+    else if (g_config.theme == 1)
+        theme = WinDarkMode::Theme::Dark;
+    WinDarkMode::set(theme);
 }
 
 void on_seek_completed(std::any)
@@ -1126,8 +1133,9 @@ int CALLBACK WinMain(const HINSTANCE hInstance, HINSTANCE, LPSTR, const int nSho
     const auto hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     RT_ASSERT(SUCCEEDED(hr), L"Failed to initialize COM.");
 
+    WinDarkMode::init();
+  
     LuaManager::init();
-
     CrashManager::init();
     MGECompositor::init();
     LuaRenderer::init();
@@ -1194,6 +1202,8 @@ int CALLBACK WinMain(const HINSTANCE hInstance, HINSTANCE, LPSTR, const int nSho
                                    L"Error", fsvc_error);
         return -1;
     }
+
+    WinDarkMode::attach(g_main_ctx.hwnd);
 
     MSG msg{};
     while (GetMessage(&msg, nullptr, 0, 0))
