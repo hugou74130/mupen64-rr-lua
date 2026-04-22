@@ -417,112 +417,36 @@ Plugin::~Plugin()
 
 void Plugin::config(const HWND hwnd)
 {
-    const auto run_config = [&] {
-        const auto dll_config = (DLLCONFIG)GetProcAddress(m_module, "DllConfig");
+    initiate_dummy();
 
-        if (!dll_config)
-        {
-            DialogService::show_dialog(
-                std::format(L"'{}' has no configuration.", IOUtils::to_wide_string(this->name())).c_str(), L"Plugin",
-                fsvc_error, hwnd);
-            goto cleanup;
-        }
+    const auto dll_config = (DLLCONFIG)GetProcAddress(m_module, "DllConfig");
 
+    if (dll_config)
         dll_config(hwnd);
-
-    cleanup:
-
-        if (g_main_ctx.core_ctx->vr_get_launched())
-        {
-            return;
-        }
-
-        const auto close_dll = (CLOSEDLL)GetProcAddress(m_module, "CloseDLL");
-        if (close_dll) close_dll();
-    };
-
-    switch (m_type)
+    else
     {
-    case plugin_video: {
-        if (!g_main_ctx.core_ctx->vr_get_launched())
-        {
-            // NOTE: Since olden days, dummy render target hwnd was the statusbar.
-            dummy_video_info.main_hwnd = Statusbar::hwnd();
-            dummy_video_info.statusbar_hwnd = Statusbar::hwnd();
-
-            const auto initiate_gfx = (INITIATEGFX)GetProcAddress(m_module, "InitiateGFX");
-            if (initiate_gfx && !initiate_gfx(dummy_video_info))
-            {
-                DialogService::show_dialog(L"Couldn't initialize video plugin.", L"Core", fsvc_information);
-            }
-        }
-
-        run_config();
-
-        break;
+        DialogService::show_dialog(
+            std::format(L"'{}' has no configuration.", IOUtils::to_wide_string(this->name())).c_str(), L"Plugin",
+            fsvc_error, hwnd);
     }
-    case plugin_audio: {
-        if (!g_main_ctx.core_ctx->vr_get_launched())
-        {
-            const auto initiate_audio = (INITIATEAUDIO)GetProcAddress(m_module, "InitiateAudio");
-            if (initiate_audio && !initiate_audio(dummy_audio_info))
-            {
-                DialogService::show_dialog(L"Couldn't initialize audio plugin.", L"Core", fsvc_information);
-            }
-        }
 
-        run_config();
-
-        break;
-    }
-    case plugin_input: {
-        if (!g_main_ctx.core_ctx->vr_get_launched())
-        {
-            if (m_version == 0x0101)
-            {
-                const auto initiate_controllers = (INITIATECONTROLLERS)GetProcAddress(m_module, "InitiateControllers");
-                if (initiate_controllers) initiate_controllers(dummy_control_info);
-            }
-            else
-            {
-                const auto old_initiate_controllers =
-                    (OLD_INITIATECONTROLLERS)GetProcAddress(m_module, "InitiateControllers");
-                if (old_initiate_controllers) old_initiate_controllers(g_main_ctx.hwnd, g_main_ctx.core.controls);
-            }
-        }
-
-        run_config();
-
-        break;
-    }
-    case plugin_rsp: {
-        if (!g_main_ctx.core_ctx->vr_get_launched())
-        {
-            auto initiateRSP = (INITIATERSP)GetProcAddress(m_module, "InitiateRSP");
-            uint32_t i = 0;
-            if (initiateRSP) initiateRSP(dummy_rsp_info, &i);
-        }
-
-        run_config();
-
-        break;
-    }
-    default:
-        assert(false);
-        break;
-    }
+    deinitiate_dummy();
 }
 
 void Plugin::test(const HWND hwnd)
 {
+    initiate_dummy();
     dll_test = (DLLTEST)GetProcAddress(m_module, "DllTest");
     if (dll_test) dll_test(hwnd);
+    deinitiate_dummy();
 }
 
 void Plugin::about(const HWND hwnd)
 {
+    initiate_dummy();
     dll_about = (DLLABOUT)GetProcAddress(m_module, "DllAbout");
     if (dll_about) dll_about(hwnd);
+    deinitiate_dummy();
 }
 
 void Plugin::initiate()
@@ -556,6 +480,103 @@ void Plugin::initiate()
                         IOUtils::to_wide_string(m_name));
         DialogService::show_dialog(msg.c_str(), L"Plugin Incompatibility", fsvc_error);
     }
+}
+
+void Plugin::initiate_dummy()
+{
+    const auto receive_extended_funcs = (RECEIVEEXTENDEDFUNCS)GetProcAddress(m_module, "ReceiveExtendedFuncs");
+    if (receive_extended_funcs)
+    {
+        core_plugin_extended_funcs *extended_funcs = nullptr;
+        switch (m_type)
+        {
+        case plugin_video:
+            extended_funcs = &g_plugin_funcs.video_extended_funcs;
+            break;
+        case plugin_audio:
+            extended_funcs = &g_plugin_funcs.audio_extended_funcs;
+            break;
+        case plugin_input:
+            extended_funcs = &g_plugin_funcs.input_extended_funcs;
+            break;
+        case plugin_rsp:
+            extended_funcs = &g_plugin_funcs.rsp_extended_funcs;
+            break;
+        default:
+            RT_ASSERT(false, L"Unknown plugin type");
+        }
+        receive_extended_funcs(extended_funcs);
+    }
+
+    switch (m_type)
+    {
+    case plugin_video: {
+        if (!g_main_ctx.core_ctx->vr_get_launched())
+        {
+            // NOTE: Since olden days, dummy render target hwnd was the statusbar.
+            dummy_video_info.main_hwnd = Statusbar::hwnd();
+            dummy_video_info.statusbar_hwnd = Statusbar::hwnd();
+
+            const auto initiate_gfx = (INITIATEGFX)GetProcAddress(m_module, "InitiateGFX");
+            if (initiate_gfx && !initiate_gfx(dummy_video_info))
+            {
+                DialogService::show_dialog(L"Couldn't initialize video plugin.", L"Core", fsvc_information);
+            }
+        }
+
+        break;
+    }
+    case plugin_audio: {
+        if (!g_main_ctx.core_ctx->vr_get_launched())
+        {
+            const auto initiate_audio = (INITIATEAUDIO)GetProcAddress(m_module, "InitiateAudio");
+            if (initiate_audio && !initiate_audio(dummy_audio_info))
+            {
+                DialogService::show_dialog(L"Couldn't initialize audio plugin.", L"Core", fsvc_information);
+            }
+        }
+
+        break;
+    }
+    case plugin_input: {
+        if (!g_main_ctx.core_ctx->vr_get_launched())
+        {
+            if (m_version == 0x0101)
+            {
+                const auto initiate_controllers = (INITIATECONTROLLERS)GetProcAddress(m_module, "InitiateControllers");
+                if (initiate_controllers) initiate_controllers(dummy_control_info);
+            }
+            else
+            {
+                const auto old_initiate_controllers =
+                    (OLD_INITIATECONTROLLERS)GetProcAddress(m_module, "InitiateControllers");
+                if (old_initiate_controllers) old_initiate_controllers(g_main_ctx.hwnd, g_main_ctx.core.controls);
+            }
+        }
+
+        break;
+    }
+    case plugin_rsp: {
+        if (!g_main_ctx.core_ctx->vr_get_launched())
+        {
+            auto initiateRSP = (INITIATERSP)GetProcAddress(m_module, "InitiateRSP");
+            uint32_t i = 0;
+            if (initiateRSP) initiateRSP(dummy_rsp_info, &i);
+        }
+
+        break;
+    }
+    default:
+        RT_ASSERT(false, L"Unknown plugin type");
+    }
+}
+
+void Plugin::deinitiate_dummy()
+{
+    if (g_main_ctx.core_ctx->vr_get_launched()) return;
+
+    const auto close_dll = (CLOSEDLL)GetProcAddress(m_module, "CloseDLL");
+    if (close_dll) close_dll();
 }
 
 t_plugin_discovery_result PluginUtil::discover_plugins(const std::filesystem::path &directory)
