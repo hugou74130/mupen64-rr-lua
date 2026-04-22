@@ -1770,6 +1770,7 @@ finish: {
         post_unlock_callbacks.pop();
     }
 
+    vr_update_effective_speed_mode();
     g_core->callbacks.readonly_changed((bool)g_core->cfg->vcr_readonly);
     g_core->callbacks.seek_status_changed();
 }
@@ -1803,6 +1804,7 @@ void vcr_stop_seek()
 
     {
         vcr_anti_lock bypass;
+        vr_update_effective_speed_mode();
         g_core->callbacks.seek_status_changed();
         g_core->callbacks.seek_completed();
         g_core->callbacks.warp_modify_status_changed(vcr.warp_modify_active);
