@@ -484,9 +484,7 @@ void gen_interrupt()
         const auto skip = g_r4300.frame_skipped;
         const auto update = g_core->cfg->render_throttling ? (g_r4300.screen_invalidated_vi ? !skip : false) : true;
 
-        // NOTE: When frame advancing, screen_invalidated has a higher change of being false despite the fact it should
-        // be true The update-limiting logic doesn't apply in frameadvance because there are no high-frequency updates
-        if (update || frame_advance_outstanding)
+        if (update)
         {
             g_core->update_screen();
             g_r4300.screen_invalidated_vi = false;
