@@ -508,3 +508,139 @@ static void attach_no_resize_subproc(const HWND hwnd)
 {
     SetWindowSubclass(hwnd, no_resize_subclass_proc, 0, 0);
 }
+
+/**
+ * \brief Converts a bitmap with a white background into a Gdiplus::Bitmap with per-pixel
+ * premultiplied alpha (PixelFormat32bppPARGB) by extracting alpha from the white matte.
+ * \param hbmp_src The source bitmap.
+ * \param invert Whether to invert the RGB channels before premultiplication.
+ * \return A new Gdiplus::Bitmap, or nullptr on failure. The caller owns the returned object.
+ */
+static Gdiplus::Bitmap *make_bitmap_alpha_from_white_matte(HBITMAP hbmp_src, bool invert = false)
+{
+    BITMAP bm{};
+    if (!GetObject(hbmp_src, sizeof(bm), &bm)) return nullptr;
+
+    const int w = bm.bmWidth;
+    const int h = bm.bmHeight;
+
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = w;
+    bmi.bmiHeader.biHeight = -h;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    std::vector<uint32_t> src(w * h);
+    HDC hdc_screen = GetDC(nullptr);
+    HDC hdc_src = CreateCompatibleDC(hdc_screen);
+    HGDIOBJ old = SelectObject(hdc_src, hbmp_src);
+    GetDIBits(hdc_src, hbmp_src, 0, h, src.data(), &bmi, DIB_RGB_COLORS);
+    SelectObject(hdc_src, old);
+    DeleteDC(hdc_src);
+    ReleaseDC(nullptr, hdc_screen);
+
+    auto *result = new Gdiplus::Bitmap(w, h, PixelFormat32bppPARGB);
+    if (!result) return nullptr;
+
+    Gdiplus::BitmapData bmd{};
+    const Gdiplus::Rect full_rect(0, 0, w, h);
+    if (result->LockBits(&full_rect, Gdiplus::ImageLockModeWrite, PixelFormat32bppPARGB, &bmd) != Gdiplus::Ok)
+    {
+        delete result;
+        return nullptr;
+    }
+
+    for (int y = 0; y < h; ++y)
+    {
+        auto *row = reinterpret_cast<uint32_t *>(static_cast<uint8_t *>(bmd.Scan0) + y * bmd.Stride);
+        for (int x = 0; x < w; ++x)
+        {
+            const uint32_t px = src[y * w + x];
+            const uint8_t b_in = (px >> 0) & 0xFF;
+            const uint8_t g_in = (px >> 8) & 0xFF;
+            const uint8_t r_in = (px >> 16) & 0xFF;
+
+            const uint8_t alpha = 255 - std::min({r_in, g_in, b_in});
+
+            uint8_t r_out = 0;
+            uint8_t g_out = 0;
+            uint8_t b_out = 0;
+            if (alpha > 0)
+            {
+                r_out = static_cast<uint8_t>(std::clamp((r_in - (255 - alpha)) * 255 / alpha, 0, 255));
+                g_out = static_cast<uint8_t>(std::clamp((g_in - (255 - alpha)) * 255 / alpha, 0, 255));
+                b_out = static_cast<uint8_t>(std::clamp((b_in - (255 - alpha)) * 255 / alpha, 0, 255));
+            }
+
+            if (invert)
+            {
+                r_out = 255 - r_out;
+                g_out = 255 - g_out;
+                b_out = 255 - b_out;
+            }
+
+            r_out = static_cast<uint8_t>(r_out * alpha / 255);
+            g_out = static_cast<uint8_t>(g_out * alpha / 255);
+            b_out = static_cast<uint8_t>(b_out * alpha / 255);
+
+            row[x] = (static_cast<uint32_t>(alpha) << 24) | (static_cast<uint32_t>(r_out) << 16) |
+                     (static_cast<uint32_t>(g_out) << 8) | static_cast<uint32_t>(b_out);
+        }
+    }
+
+    result->UnlockBits(&bmd);
+    return result;
+}
+
+/**
+ * \brief Draws a bitmap resource into a DC with smooth transparency by extracting per-pixel
+ * alpha from the white matte and scaling with high-quality bicubic interpolation via GDI+.
+ * \param hdc The destination device context.
+ * \param rc Destination rectangle; the bitmap is stretched to fill this area.
+ * \param hinst The module instance containing the bitmap resource.
+ * \param id The resource identifier of the bitmap.
+ * \param invert Whether to invert the RGB channels before premultiplication.
+ */
+static void draw_bitmap_transparent(HDC hdc, RECT rc, HINSTANCE hinst, int id, bool invert = false)
+{
+    HBITMAP hbmp_src = LoadBitmap(hinst, MAKEINTRESOURCE(id));
+    if (!hbmp_src) return;
+
+    Gdiplus::Bitmap *bmp = make_bitmap_alpha_from_white_matte(hbmp_src, invert);
+    DeleteObject(hbmp_src);
+
+    if (!bmp) return;
+
+    Gdiplus::Graphics g(hdc);
+    g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeHighQuality);
+    g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+
+    const Gdiplus::RectF dest(static_cast<Gdiplus::REAL>(rc.left), static_cast<Gdiplus::REAL>(rc.top),
+                              static_cast<Gdiplus::REAL>(rc.right - rc.left),
+                              static_cast<Gdiplus::REAL>(rc.bottom - rc.top));
+
+    g.DrawImage(bmp, dest);
+
+    delete bmp;
+}
+
+/**
+ * \brief Loads a bitmap resource and adds it to an image list using a colour key for transparency, then frees the
+ * bitmap handle.
+ * \param himl The image list to add the bitmap to.
+ * \param hinst The module instance containing the bitmap resource.
+ * \param id The resource identifier of the bitmap.
+ * \param mask The colour to treat as transparent. Defaults to white.
+ * \return The index of the newly added image, or -1 on failure.
+ */
+static int ImageList_AddMaskedFromBitmap(HIMAGELIST himl, HINSTANCE hinst, int id, COLORREF mask = RGB(255, 255, 255))
+{
+    HBITMAP hbmp = LoadBitmap(hinst, MAKEINTRESOURCE(id));
+    if (!hbmp) return -1;
+    const int index = ImageList_AddMasked(himl, hbmp, mask);
+    DeleteObject(hbmp);
+    return index;
+}

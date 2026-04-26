@@ -32,6 +32,36 @@ IDB_RSP                 BITMAP                  "icons\\plugin_rsp.bmp"
 
 IDB_SOUND               BITMAP                  "icons\\plugin_audio.bmp"
 
+IDB_FLAG_GERMANY        BITMAP                  "icons\\BMPs\\germany.bmp"
+
+IDB_FLAG_USA            BITMAP                  "icons\\BMPs\\usa.bmp"
+
+IDB_FLAG_JAPAN          BITMAP                  "icons\\BMPs\\japan.bmp"
+
+IDB_FLAG_EUROPE         BITMAP                  "icons\\BMPs\\europe.bmp"
+
+IDB_FLAG_AUSTRALIA      BITMAP                  "icons\\BMPs\\austral.bmp"
+
+IDB_FLAG_ITALIA         BITMAP                  "icons\\BMPs\\italy.bmp"
+
+IDB_FLAG_FRANCE         BITMAP                  "icons\\BMPs\\france.bmp"
+
+IDB_FLAG_SPAIN          BITMAP                  "icons\\BMPs\\spain.bmp"
+
+IDB_FLAG_UNKNOWN        BITMAP                  "icons\\BMPs\\unknown.bmp"
+
+IDB_FLAG_DEMO           BITMAP                  "icons\\BMPs\\demo.bmp"
+
+IDB_FLAG_BETA           BITMAP                  "icons\\BMPs\\n64beta.bmp"
+
+IDB_CURRENT             BITMAP                  "icons\\BMPs\\current.bmp"
+
+IDB_MARKER              BITMAP                  "icons\\BMPs\\marker.bmp"
+
+IDB_DENY                BITMAP                  "icons\\BMPs\\deny.bmp"
+
+IDB_CHANGED             BITMAP                  "icons\\BMPs\\changed.bmp"
+
 IDR_INSPECT_LUA_FILE    TEXTFILE                "..\\..\\vendor\\lua-modules\\inspect.lua"
 
 IDR_API_LUA_FILE        TEXTFILE                "..\\Lua\\api.lua"
@@ -92,10 +122,10 @@ BEGIN
     PUSHBUTTON      "Config",IDM_RSP_SETTINGS,54,216,48,15,WS_DISABLED
     PUSHBUTTON      "Test",IDRSPTEST,108,216,48,15,WS_DISABLED
     PUSHBUTTON      "About",IDRSPABOUT,162,216,48,15,WS_DISABLED
-    CONTROL         "",IDB_DISPLAY,"Static",SS_BITMAP,13,21,15,13
-    CONTROL         "",IDB_CONTROL,"Static",SS_BITMAP,13,80,15,13
-    CONTROL         "",IDB_SOUND,"Static",SS_BITMAP,13,139,15,13
-    CONTROL         "",IDB_RSP,"Static",SS_BITMAP,13,198,15,13
+    CONTROL         "",IDB_DISPLAY,"Static",SS_OWNERDRAW,14,19,34,30
+    CONTROL         "",IDB_CONTROL,"Static",SS_OWNERDRAW,14,79,34,30
+    CONTROL         "",IDB_SOUND,"Static",SS_OWNERDRAW,14,139,34,30
+    CONTROL         "",IDB_RSP,"Static",SS_OWNERDRAW,14,199,34,30
     LTEXT           "",IDC_PLUGIN_WARNING,8,242,200,13
     PUSHBUTTON      "More...",IDC_PLUGIN_DISCOVERY_INFO,6,255,70,15
 END

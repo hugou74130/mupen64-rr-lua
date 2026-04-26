@@ -394,16 +394,18 @@ INT_PTR CALLBACK plugins_cfg(const HWND hwnd, const UINT message, const WPARAM w
             g_plugin_discovery_thread.join();
         }
         break;
+    case WM_DRAWITEM: {
+        const auto dis = reinterpret_cast<DRAWITEMSTRUCT *>(l_param);
+        static constexpr std::array plugin_icon_ids = {IDB_DISPLAY, IDB_CONTROL, IDB_SOUND, IDB_RSP};
+        if (dis->CtlType == ODT_STATIC && std::ranges::contains(plugin_icon_ids, static_cast<int>(dis->CtlID)))
+        {
+            draw_bitmap_transparent(dis->hDC, dis->rcItem, g_main_ctx.hinst, static_cast<int>(dis->CtlID),
+                                    WinDarkMode::theme_data.bg_color == WinDarkMode::dark_theme_data.bg_color);
+            return TRUE;
+        }
+        return FALSE;
+    }
     case WM_INITDIALOG: {
-        SendDlgItemMessage(hwnd, IDB_DISPLAY, STM_SETIMAGE, IMAGE_BITMAP,
-                           (LPARAM)LoadImage(g_main_ctx.hinst, MAKEINTRESOURCE(IDB_DISPLAY), IMAGE_BITMAP, 0, 0, 0));
-        SendDlgItemMessage(hwnd, IDB_CONTROL, STM_SETIMAGE, IMAGE_BITMAP,
-                           (LPARAM)LoadImage(g_main_ctx.hinst, MAKEINTRESOURCE(IDB_CONTROL), IMAGE_BITMAP, 0, 0, 0));
-        SendDlgItemMessage(hwnd, IDB_SOUND, STM_SETIMAGE, IMAGE_BITMAP,
-                           (LPARAM)LoadImage(g_main_ctx.hinst, MAKEINTRESOURCE(IDB_SOUND), IMAGE_BITMAP, 0, 0, 0));
-        SendDlgItemMessage(hwnd, IDB_RSP, STM_SETIMAGE, IMAGE_BITMAP,
-                           (LPARAM)LoadImage(g_main_ctx.hinst, MAKEINTRESOURCE(IDB_RSP), IMAGE_BITMAP, 0, 0, 0));
-
         refresh_plugins_page(hwnd);
 
         WinDarkMode::attach(hwnd);
