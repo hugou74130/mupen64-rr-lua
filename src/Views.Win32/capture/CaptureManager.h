@@ -65,11 +65,14 @@ void start_capture(std::filesystem::path path, t_config::EncoderType encoder_typ
 void stop_capture(const std::function<void(bool)> &callback = nullptr);
 
 /**
- * \brief Appends the current video frame to the capture.
- * \param duplicate_last Whether the appended frame should be a duplicate of the last appended frame. This is used for
- * lag frames.
+ * \brief Notifies the capture manager of a VI.
  */
-void append_video(bool duplicate_last = false);
+void vi();
+
+/**
+ * \brief Notifies the capture manager of input changes.
+ */
+void input();
 
 /**
  * \brief Notifies the capture manager of the audio changing
