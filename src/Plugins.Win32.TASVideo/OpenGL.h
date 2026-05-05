@@ -30,9 +30,6 @@ struct GLInfo
 
     float scaleX, scaleY;
 
-    BOOL ATI_texture_env_combine3; // Radeon
-    BOOL ATIX_texture_env_route;   // Radeon
-
     BOOL ARB_multitexture;         // TNT, GeForce, Rage 128, Radeon
     BOOL ARB_texture_env_combine;  // GeForce, Rage 128, Radeon
     BOOL ARB_texture_env_crossbar; // Radeon (GeForce supports it, but doesn't report it)
@@ -41,15 +38,12 @@ struct GLInfo
     BOOL EXT_texture_env_combine; // TNT, GeForce, Rage 128, Radeon
     BOOL EXT_secondary_color;     // GeForce, Radeon
 
-    BOOL NV_texture_env_combine4; // TNT, GeForce
-    BOOL NV_register_combiners;   // GeForce
     BOOL ARB_buffer_region;
     BOOL ARB_pbuffer;
     BOOL ARB_render_texture;
     BOOL ARB_pixel_format;
 
     int maxTextureUnits; // TNT = 2, GeForce = 2-4, Rage 128 = 2, Radeon = 3-6
-    int maxGeneralCombiners;
 
     TextureFilter textureFilter = TextureFilter::None;
     float originAdjust;
@@ -69,9 +63,6 @@ struct GLInfo
     GLubyte stipplePattern[32][8][128];
     BYTE lastStipple;
 
-    // The combiner compiler override. 0 for autodetect.
-    DWORD combiner;
-
     BOOL ignoreScissor;
 
     // Clears the game with black color every frame regardless of what N64 asks
@@ -82,7 +73,7 @@ extern GLInfo OGL;
 
 struct GLcolor
 {
-    float r, g, b, a;
+    float r{}, g{}, b{}, a{};
 };
 
 void OGL_ReadPixels();
