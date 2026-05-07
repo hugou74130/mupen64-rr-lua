@@ -490,6 +490,13 @@ void on_config_loaded(std::any)
         theme = WinDarkMode::Theme::Light;
     else if (g_config.theme == 1)
         theme = WinDarkMode::Theme::Dark;
+
+    if (g_main_ctx.wine)
+    {
+        g_view_logger->info("Falling back to light theme for Wine compatibility");
+        theme = WinDarkMode::Theme::Light;
+    }
+
     WinDarkMode::set(theme);
 }
 
@@ -1128,7 +1135,7 @@ int CALLBACK WinMain(const HINSTANCE hInstance, HINSTANCE, LPSTR, const int nSho
     const auto hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     RT_ASSERT(SUCCEEDED(hr), L"Failed to initialize COM.");
 
-    WinDarkMode::init();
+    if (!g_main_ctx.wine) WinDarkMode::init();
 
     LuaManager::init();
     CrashManager::init();
