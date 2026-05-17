@@ -11,7 +11,7 @@
 
 StrUtils::unordered_string_map<size_t> dialog_choice_map;
 
-const std::vector<std::string> ALWAYS_LOUD_IDS = {VIEW_DLG_RAMSTART};
+const std::vector<std::string> ALWAYS_LOUD_IDS = {VIEW_DLG_RAMSTART, VIEW_DLG_CONFIRM_SETTINGS_DISCARD};
 
 size_t DialogService::show_multiple_choice_dialog(std::string_view id, const std::vector<std::wstring> &choices,
                                                   const wchar_t *str, const wchar_t *title, core_dialog_type type,
