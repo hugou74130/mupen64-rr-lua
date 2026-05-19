@@ -65,13 +65,14 @@ static void draw_lua(bool force)
             success &= LuaCallbacks::invoke_callbacks_with_key(lua, LuaCallbacks::REG_ATDRAWD2D);
             dc->EndDraw();
 
-            lua->rctx.presenter->present();
+            if (!g_main_ctx.wine)
+                lua->rctx.presenter->present();
         }
 
         // GDI Graphics. Ugh.
         success &= LuaCallbacks::invoke_callbacks_with_key(lua, LuaCallbacks::REG_ATUPDATESCREEN);
 
-        if (lua->rctx.has_gdi_content)
+        if (lua->rctx.has_gdi_content && !g_main_ctx.wine)
         {
             present_gdi_content(lua);
         }
@@ -164,9 +165,12 @@ static void resize(uint32_t width, uint32_t height)
 
         if (lua->rctx.presenter) lua->rctx.presenter->resize(lua->rctx.dc_size);
 
-        const UINT overlay_swp_flags = SWP_NOACTIVATE | SWP_NOMOVE | (s_detached_overlays ? SWP_NOZORDER : 0);
-        SetWindowPos(lua->rctx.gdi_overlay_hwnd, HWND_TOP, 0, 0, width, height, overlay_swp_flags);
-        SetWindowPos(lua->rctx.d2d_overlay_hwnd, HWND_TOP, 0, 0, width, height, overlay_swp_flags);
+        if (!g_main_ctx.wine)
+        {
+            const UINT overlay_swp_flags = SWP_NOACTIVATE | SWP_NOMOVE | (s_detached_overlays ? SWP_NOZORDER : 0);
+            SetWindowPos(lua->rctx.gdi_overlay_hwnd, HWND_TOP, 0, 0, width, height, overlay_swp_flags);
+            SetWindowPos(lua->rctx.d2d_overlay_hwnd, HWND_TOP, 0, 0, width, height, overlay_swp_flags);
+        }
     }
 }
 
@@ -217,7 +221,7 @@ void LuaRenderer::init()
     if (g_main_ctx.wine)
     {
         s_detached_overlays = true;
-        g_view_logger->warn(L"Detected Wine environment, using detached Lua overlays");
+        g_view_logger->warn(L"Detected Wine environment, using inline Lua compositing (no overlay windows)");
     }
 
     WNDCLASS wndclass = {0};
@@ -302,23 +306,31 @@ void LuaRenderer::create_renderer(t_lua_rendering_context *ctx, t_lua_environmen
         s_detached_overlays ? WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW : WS_EX_LAYERED | WS_EX_TRANSPARENT;
     const auto style = s_detached_overlays ? WS_POPUP | WS_VISIBLE : WS_CHILD | WS_VISIBLE;
 
-    ctx->gdi_overlay_hwnd = CreateWindowEx(ex_style, OVERLAY_CLASS, L"", style, 0, 0, ctx->dc_size.width,
-                                           ctx->dc_size.height, g_main_ctx.hwnd, nullptr, g_main_ctx.hinst, nullptr);
-
-    ctx->d2d_overlay_hwnd = CreateWindowEx(ex_style, OVERLAY_CLASS, L"", style, 0, 0, ctx->dc_size.width,
-                                           ctx->dc_size.height, g_main_ctx.hwnd, nullptr, g_main_ctx.hinst, nullptr);
-
-    // This env isn't in g_lua_environments yet, so we provide these hwnds manually.
-    move_and_order_overlays(std::vector<HWND>{ctx->gdi_overlay_hwnd, ctx->d2d_overlay_hwnd});
-
-    // Put these over the MGE compositor.
-    if (!s_detached_overlays)
+    if (!g_main_ctx.wine)
     {
-        SetWindowPos(ctx->gdi_overlay_hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
-        SetWindowPos(ctx->d2d_overlay_hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
-    }
+        ctx->gdi_overlay_hwnd = CreateWindowEx(ex_style, OVERLAY_CLASS, L"", style, 0, 0, ctx->dc_size.width,
+                                               ctx->dc_size.height, g_main_ctx.hwnd, nullptr, g_main_ctx.hinst, nullptr);
 
-    present_gdi_content(env);
+        ctx->d2d_overlay_hwnd = CreateWindowEx(ex_style, OVERLAY_CLASS, L"", style, 0, 0, ctx->dc_size.width,
+                                               ctx->dc_size.height, g_main_ctx.hwnd, nullptr, g_main_ctx.hinst, nullptr);
+
+        // This env isn't in g_lua_environments yet, so we provide these hwnds manually.
+        move_and_order_overlays(std::vector<HWND>{ctx->gdi_overlay_hwnd, ctx->d2d_overlay_hwnd});
+
+        // Put these over the MGE compositor.
+        if (!s_detached_overlays)
+        {
+            SetWindowPos(ctx->gdi_overlay_hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+            SetWindowPos(ctx->d2d_overlay_hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+        }
+
+        present_gdi_content(env);
+    }
+    else
+    {
+        ctx->gdi_overlay_hwnd = nullptr;
+        ctx->d2d_overlay_hwnd = nullptr;
+    }
 
     if (!g_config.lazy_renderer_init)
     {

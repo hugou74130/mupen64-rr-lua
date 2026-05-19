@@ -8,6 +8,7 @@
 #include <components/MGECompositor.h>
 #include <Plugin.h>
 #include <Messenger.h>
+#include <lua/LuaRenderer.h>
 
 constexpr auto CONTROL_CLASS_NAME = L"game_control";
 constexpr DXGI_FORMAT TEXTURE_FORMAT = DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -74,6 +75,10 @@ struct t_mge_context
     ComPtr<ID3D11SamplerState> sampler;
     ComPtr<ID3D11VertexShader> vs;
     ComPtr<ID3D11PixelShader> ps;
+
+    // Wine workaround: DIB section for inline Lua compositing
+    HDC dib_dc{};
+    HBITMAP dib_bmp{};
 };
 
 static t_mge_context mge_context{};
@@ -176,6 +181,9 @@ static void create_d3d(const HWND hwnd)
 
 static void destroy_d3d()
 {
+    if (mge_context.dib_bmp) { DeleteObject(mge_context.dib_bmp); mge_context.dib_bmp = nullptr; }
+    if (mge_context.dib_dc) { DeleteDC(mge_context.dib_dc); mge_context.dib_dc = nullptr; }
+
     mge_context.srv.Reset();
     mge_context.texture.Reset();
     mge_context.rtv.Reset();
@@ -284,13 +292,34 @@ static void recreate_mge_context_d3d()
     }
 
     _aligned_free(mge_context.rgba_buffer);
+    if (mge_context.dib_bmp) { DeleteObject(mge_context.dib_bmp); mge_context.dib_bmp = nullptr; }
+    if (mge_context.dib_dc) { DeleteDC(mge_context.dib_dc); mge_context.dib_dc = nullptr; }
 
     const auto buffer_size = mge_context.width * mge_context.height * 4;
 
-    mge_context.rgba_buffer = _aligned_malloc(buffer_size, 16);
-    RT_ASSERT(mge_context.rgba_buffer, L"Failed to allocate MGE buffers");
+    if (g_main_ctx.wine)
+    {
+        BITMAPINFO bmi = {};
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth = mge_context.width;
+        bmi.bmiHeader.biHeight = -mge_context.height;
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
 
-    ZeroMemory(mge_context.rgba_buffer, buffer_size);
+        mge_context.dib_dc = CreateCompatibleDC(nullptr);
+        mge_context.dib_bmp = CreateDIBSection(mge_context.dib_dc, &bmi, DIB_RGB_COLORS,
+                                               &mge_context.rgba_buffer, nullptr, 0);
+        RT_ASSERT(mge_context.rgba_buffer, L"Failed to allocate MGE DIB section");
+        SelectObject(mge_context.dib_dc, mge_context.dib_bmp);
+        ZeroMemory(mge_context.rgba_buffer, buffer_size);
+    }
+    else
+    {
+        mge_context.rgba_buffer = _aligned_malloc(buffer_size, 16);
+        RT_ASSERT(mge_context.rgba_buffer, L"Failed to allocate MGE buffers");
+        ZeroMemory(mge_context.rgba_buffer, buffer_size);
+    }
 
     RECT rc;
     RT_ASSERT(GetClientRect(mge_context.hwnd, &rc), L"GetClientRect failed");
@@ -362,6 +391,18 @@ void MGECompositor::update_screen()
     }
 
     g_plugin_funcs.video_read_video(&mge_context.rgba_buffer);
+
+    if (g_main_ctx.wine && mge_context.dib_dc)
+    {
+        // Resize Lua overlays to match the game buffer size so blit_all aligns correctly.
+        RECT game_rect = {0, 0, mge_context.width, mge_context.height};
+        Messenger::publish(Messenger::Message::SizeChanged, game_rect);
+
+        g_main_ctx.dispatcher->invoke([]() {
+            LuaRenderer::repaint_visuals();
+            LuaRenderer::blit_all(mge_context.dib_dc);
+        });
+    }
 
     upload_rgb32_buffer();
     render_and_present();
