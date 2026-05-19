@@ -52,6 +52,20 @@ static LRESULT CALLBACK main_window_subclass_proc(HWND hwnd, UINT msg, WPARAM wp
 
 static void present_gdi_content(t_lua_environment *lua)
 {
+    if (g_main_ctx.wine)
+    {
+        // Wine workaround: UpdateLayeredWindow doesn't work reliably on child windows under Wine.
+        // Use SetLayeredWindowAttributes(LWA_COLORKEY) + standard BitBlt instead.
+        HDC hdc = GetDC(lua->rctx.gdi_overlay_hwnd);
+        if (hdc)
+        {
+            BitBlt(hdc, 0, 0, (int)lua->rctx.dc_size.width, (int)lua->rctx.dc_size.height,
+                   lua->rctx.gdi_back_dc, 0, 0, SRCCOPY);
+            ReleaseDC(lua->rctx.gdi_overlay_hwnd, hdc);
+        }
+        return;
+    }
+
     SIZE size = {(LONG)lua->rctx.dc_size.width, (LONG)lua->rctx.dc_size.height};
     POINT src_pt = {0, 0};
 
@@ -347,6 +361,14 @@ void LuaRenderer::create_renderer(t_lua_rendering_context *ctx, t_lua_environmen
     {
         SetWindowPos(ctx->gdi_overlay_hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
         SetWindowPos(ctx->d2d_overlay_hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+    }
+
+    if (g_main_ctx.wine)
+    {
+        // Wine: use SetLayeredWindowAttributes for colorkey transparency.
+        // This is much more reliable than UpdateLayeredWindow on child windows under Wine.
+        SetLayeredWindowAttributes(ctx->gdi_overlay_hwnd, LuaRenderer::LUA_GDI_COLOR_MASK, 255, LWA_COLORKEY);
+        SetLayeredWindowAttributes(ctx->d2d_overlay_hwnd, LuaRenderer::LUA_GDI_COLOR_MASK, 255, LWA_COLORKEY);
     }
 
     present_gdi_content(env);

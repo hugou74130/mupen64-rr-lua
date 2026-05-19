@@ -76,6 +76,19 @@ void GDIPresenter::resize(D2D1_SIZE_U size)
 
 void GDIPresenter::present()
 {
+    if (g_main_ctx.wine)
+    {
+        // Wine workaround: UpdateLayeredWindow is broken on child windows under Wine.
+        // Use standard BitBlt; the transparency is handled by SetLayeredWindowAttributes(LWA_COLORKEY).
+        HDC hdc = GetDC(m_hwnd);
+        if (hdc)
+        {
+            BitBlt(hdc, 0, 0, (int)m_size.width, (int)m_size.height, m_gdi_back_dc, 0, 0, SRCCOPY);
+            ReleaseDC(m_hwnd, hdc);
+        }
+        return;
+    }
+
     SIZE size = {(LONG)m_size.width, (LONG)m_size.height};
     POINT src_pt = {0, 0};
 
