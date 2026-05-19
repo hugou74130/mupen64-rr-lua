@@ -20,8 +20,51 @@ static std::atomic<bool> draw_thread_running{false};
 
 static void move_and_order_overlays(const std::optional<std::vector<HWND>> &hwnds = std::nullopt);
 
+static void set_overlay_visibility(bool visible)
+{
+    if (!s_detached_overlays) return;
+
+    for (const auto &lua : g_lua_environments)
+    {
+        if (IsWindow(lua->rctx.gdi_overlay_hwnd))
+            ShowWindow(lua->rctx.gdi_overlay_hwnd, visible ? SW_SHOW : SW_HIDE);
+        if (IsWindow(lua->rctx.d2d_overlay_hwnd))
+            ShowWindow(lua->rctx.d2d_overlay_hwnd, visible ? SW_SHOW : SW_HIDE);
+    }
+}
+
+static LRESULT CALLBACK main_window_subclass_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+                                                   UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    switch (msg)
+    {
+    case WM_SIZE:
+        if (wparam == SIZE_MINIMIZED)
+            set_overlay_visibility(false);
+        else
+            set_overlay_visibility(true);
+        break;
+    case WM_NCDESTROY:
+        RemoveWindowSubclass(hwnd, main_window_subclass_proc, uIdSubclass);
+        break;
+    }
+    return DefSubclassProc(hwnd, msg, wparam, lparam);
+}
+
 static void present_gdi_content(t_lua_environment *lua)
 {
+    if (g_main_ctx.wine)
+    {
+        HDC hdc = GetDC(lua->rctx.gdi_overlay_hwnd);
+        if (hdc)
+        {
+            BitBlt(hdc, 0, 0, (int)lua->rctx.dc_size.width, (int)lua->rctx.dc_size.height,
+                   lua->rctx.gdi_back_dc, 0, 0, SRCCOPY);
+            ReleaseDC(lua->rctx.gdi_overlay_hwnd, hdc);
+        }
+        return;
+    }
+
     SIZE size = {(LONG)lua->rctx.dc_size.width, (LONG)lua->rctx.dc_size.height};
     POINT src_pt = {0, 0};
 
@@ -217,7 +260,8 @@ void LuaRenderer::init()
     if (g_main_ctx.wine)
     {
         s_detached_overlays = true;
-        g_view_logger->warn(L"Detected Wine environment, using detached Lua overlays");
+        SetWindowSubclass(g_main_ctx.hwnd, main_window_subclass_proc, 0, 0);
+        g_view_logger->warn(L"Detected Wine environment, using detached disabled Lua overlays");
     }
 
     WNDCLASS wndclass = {0};
@@ -300,7 +344,8 @@ void LuaRenderer::create_renderer(t_lua_rendering_context *ctx, t_lua_environmen
 
     const auto ex_style =
         s_detached_overlays ? WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW : WS_EX_LAYERED | WS_EX_TRANSPARENT;
-    const auto style = s_detached_overlays ? WS_POPUP | WS_VISIBLE : WS_CHILD | WS_VISIBLE;
+    // Wine workaround: add WS_DISABLED to prevent focus/activation on click (Wine bug #33943).
+    const auto style = s_detached_overlays ? WS_POPUP | WS_VISIBLE | WS_DISABLED : WS_CHILD | WS_VISIBLE;
 
     ctx->gdi_overlay_hwnd = CreateWindowEx(ex_style, OVERLAY_CLASS, L"", style, 0, 0, ctx->dc_size.width,
                                            ctx->dc_size.height, g_main_ctx.hwnd, nullptr, g_main_ctx.hinst, nullptr);
@@ -316,6 +361,12 @@ void LuaRenderer::create_renderer(t_lua_rendering_context *ctx, t_lua_environmen
     {
         SetWindowPos(ctx->gdi_overlay_hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
         SetWindowPos(ctx->d2d_overlay_hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+    }
+
+    if (g_main_ctx.wine)
+    {
+        SetLayeredWindowAttributes(ctx->gdi_overlay_hwnd, LuaRenderer::LUA_GDI_COLOR_MASK, 255, LWA_COLORKEY);
+        SetLayeredWindowAttributes(ctx->d2d_overlay_hwnd, LuaRenderer::LUA_GDI_COLOR_MASK, 255, LWA_COLORKEY);
     }
 
     present_gdi_content(env);
