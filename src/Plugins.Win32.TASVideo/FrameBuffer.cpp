@@ -207,65 +207,59 @@ void FrameBuffer_RenderBuffer(u32 address)
     {
         if ((current->startAddress <= address) && (current->endAddress >= address))
         {
-            glPushAttrib(GL_ENABLE_BIT | GL_VIEWPORT_BIT);
-
-            Combiner_BeginTextureUpdate();
-            TextureCache_ActivateTexture(0, current->texture);
-            Combiner_SetCombine(EncodeCombineMode(0, 0, 0, TEXEL0, 0, 0, 0, 1, 0, 0, 0, TEXEL0, 0, 0, 0, 1));
-            /*			if (OGL.ARB_multitexture)
-                        {
-                            for (int i = 0; i < OGL.maxTextureUnits; i++)
-                            {
-                                glActiveTextureARB( GL_TEXTURE0_ARB + i );
-                                glDisable( GL_TEXTURE_2D );
-                            }
-
-                            glActiveTextureARB( GL_TEXTURE0_ARB );
-                        }
-
-                        TextureCache_ActivateTexture( 0, current->texture );
-                        glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
-                        glEnable( GL_TEXTURE_2D );*/
+            // Save state
+            GLboolean blend = glIsEnabled(GL_BLEND);
+            GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
+            GLboolean cullFace = glIsEnabled(GL_CULL_FACE);
+            GLboolean polyOffset = glIsEnabled(GL_POLYGON_OFFSET_FILL);
+            GLboolean scissorTest = glIsEnabled(GL_SCISSOR_TEST);
+            GLint oldViewport[4];
+            glGetIntegerv(GL_VIEWPORT, oldViewport);
+            GLint oldProgram;
+            glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
+            GLint oldVAO;
+            glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &oldVAO);
 
             glDisable(GL_BLEND);
-            glDisable(GL_ALPHA_TEST);
             glDisable(GL_DEPTH_TEST);
             glDisable(GL_CULL_FACE);
             glDisable(GL_POLYGON_OFFSET_FILL);
-            //			glDisable( GL_REGISTER_COMBINERS_NV );
-            glDisable(GL_FOG);
-
-            glMatrixMode(GL_PROJECTION);
-            glLoadIdentity();
-            glOrtho(0, OGL.width, 0, OGL.height, -1.0f, 1.0f);
-            glViewport(0, OGL.heightOffset, OGL.width, OGL.height);
             glDisable(GL_SCISSOR_TEST);
 
-            float u1, v1;
+            glViewport(0, OGL.heightOffset, OGL.width, OGL.height);
 
-            u1 = (float)current->texture->width / (float)current->texture->realWidth;
-            v1 = (float)current->texture->height / (float)current->texture->realHeight;
+            float u1 = (float)current->texture->width / (float)current->texture->realWidth;
+            float v1 = (float)current->texture->height / (float)current->texture->realHeight;
 
             glDrawBuffer(GL_FRONT);
-            glBegin(GL_QUADS);
-            glTexCoord2f(0.0f, 0.0f);
-            glVertex2f(0.0f, OGL.height - current->texture->height);
-
-            glTexCoord2f(0.0f, v1);
-            glVertex2f(0.0f, OGL.height);
-
-            glTexCoord2f(u1, v1);
-            glVertex2f(current->texture->width, OGL.height);
-
-            glTexCoord2f(u1, 0.0f);
-            glVertex2f(current->texture->width, OGL.height - current->texture->height);
-            glEnd();
+            OGL_BlitTexture(current->texture->glName, 0.0f, OGL.height - current->texture->height,
+                            current->texture->width, current->texture->height, u1, v1);
             glDrawBuffer(GL_BACK);
 
-            /*			glEnable( GL_TEXTURE_2D );
-                        glActiveTextureARB( GL_TEXTURE0_ARB );
-                        glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_ARB );*/
-            glPopAttrib();
+            // Restore state
+            if (blend)
+                glEnable(GL_BLEND);
+            else
+                glDisable(GL_BLEND);
+            if (depthTest)
+                glEnable(GL_DEPTH_TEST);
+            else
+                glDisable(GL_DEPTH_TEST);
+            if (cullFace)
+                glEnable(GL_CULL_FACE);
+            else
+                glDisable(GL_CULL_FACE);
+            if (polyOffset)
+                glEnable(GL_POLYGON_OFFSET_FILL);
+            else
+                glDisable(GL_POLYGON_OFFSET_FILL);
+            if (scissorTest)
+                glEnable(GL_SCISSOR_TEST);
+            else
+                glDisable(GL_SCISSOR_TEST);
+            glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+            glUseProgram(oldProgram);
+            glBindVertexArray(oldVAO);
 
             current->changed = FALSE;
 
@@ -287,63 +281,57 @@ void FrameBuffer_RestoreBuffer(u32 address, u16 size, u16 width)
     {
         if ((current->startAddress == address) && (current->width == width) && (current->size == size))
         {
-            glPushAttrib(GL_ENABLE_BIT | GL_VIEWPORT_BIT);
-
-            /*			if (OGL.ARB_multitexture)
-                        {
-                            for (int i = 0; i < OGL.maxTextureUnits; i++)
-                            {
-                                glActiveTextureARB( GL_TEXTURE0_ARB + i );
-                                glDisable( GL_TEXTURE_2D );
-                            }
-
-                            glActiveTextureARB( GL_TEXTURE0_ARB );
-                        }
-
-                        TextureCache_ActivateTexture( 0, current->texture );
-                        glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
-                        glEnable( GL_TEXTURE_2D );*/
-            Combiner_BeginTextureUpdate();
-            TextureCache_ActivateTexture(0, current->texture);
-            Combiner_SetCombine(EncodeCombineMode(0, 0, 0, TEXEL0, 0, 0, 0, 1, 0, 0, 0, TEXEL0, 0, 0, 0, 1));
+            // Save state
+            GLboolean blend = glIsEnabled(GL_BLEND);
+            GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
+            GLboolean cullFace = glIsEnabled(GL_CULL_FACE);
+            GLboolean polyOffset = glIsEnabled(GL_POLYGON_OFFSET_FILL);
+            GLboolean scissorTest = glIsEnabled(GL_SCISSOR_TEST);
+            GLint oldViewport[4];
+            glGetIntegerv(GL_VIEWPORT, oldViewport);
+            GLint oldProgram;
+            glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
+            GLint oldVAO;
+            glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &oldVAO);
 
             glDisable(GL_BLEND);
-            glDisable(GL_ALPHA_TEST);
             glDisable(GL_DEPTH_TEST);
             glDisable(GL_SCISSOR_TEST);
             glDisable(GL_CULL_FACE);
             glDisable(GL_POLYGON_OFFSET_FILL);
-            // glDisable( GL_REGISTER_COMBINERS_NV );
-            glDisable(GL_FOG);
-            //			glDepthMask( FALSE );
 
-            glMatrixMode(GL_PROJECTION);
-            glLoadIdentity();
-            glOrtho(0, OGL.width, 0, OGL.height, -1.0f, 1.0f);
-            //			glOrtho( 0, RDP.width, RDP.height, 0, -1.0f, 1.0f );
             glViewport(0, OGL.heightOffset, OGL.width, OGL.height);
 
-            float u1, v1;
+            float u1 = (float)current->texture->width / (float)current->texture->realWidth;
+            float v1 = (float)current->texture->height / (float)current->texture->realHeight;
 
-            u1 = (float)current->texture->width / (float)current->texture->realWidth;
-            v1 = (float)current->texture->height / (float)current->texture->realHeight;
+            OGL_BlitTexture(current->texture->glName, 0.0f, OGL.height - current->texture->height,
+                            current->texture->width, current->texture->height, u1, v1);
 
-            glBegin(GL_QUADS);
-            glTexCoord2f(0.0f, 0.0f);
-            glVertex2f(0.0f, OGL.height - current->texture->height);
-
-            glTexCoord2f(0.0f, v1);
-            glVertex2f(0.0f, OGL.height);
-
-            glTexCoord2f(u1, v1);
-            glVertex2f(current->texture->width, OGL.height);
-
-            glTexCoord2f(u1, 0.0f);
-            glVertex2f(current->texture->width, OGL.height - current->texture->height);
-            glEnd();
-
-            glLoadIdentity();
-            glPopAttrib();
+            // Restore state
+            if (blend)
+                glEnable(GL_BLEND);
+            else
+                glDisable(GL_BLEND);
+            if (depthTest)
+                glEnable(GL_DEPTH_TEST);
+            else
+                glDisable(GL_DEPTH_TEST);
+            if (cullFace)
+                glEnable(GL_CULL_FACE);
+            else
+                glDisable(GL_CULL_FACE);
+            if (polyOffset)
+                glEnable(GL_POLYGON_OFFSET_FILL);
+            else
+                glDisable(GL_POLYGON_OFFSET_FILL);
+            if (scissorTest)
+                glEnable(GL_SCISSOR_TEST);
+            else
+                glDisable(GL_SCISSOR_TEST);
+            glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+            glUseProgram(oldProgram);
+            glBindVertexArray(oldVAO);
 
             FrameBuffer_MoveToTop(current);
 

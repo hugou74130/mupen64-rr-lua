@@ -89,3 +89,8 @@ void OGL_UpdateScale();
 void OGL_ClearDepthBuffer();
 void OGL_ClearColorBuffer(float *color);
 void OGL_ResizeWindow();
+
+// Core OpenGL blit helpers
+void OGL_InitBlitResources();
+void OGL_DestroyBlitResources();
+void OGL_BlitTexture(GLuint texture, float x, float y, float w, float h, float u1, float v1);

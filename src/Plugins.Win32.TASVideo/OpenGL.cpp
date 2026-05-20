@@ -10,6 +10,7 @@
 #include "VI.h"
 
 #include <format>
+#include <cstring>
 
 GLInfo OGL{};
 
@@ -899,4 +900,146 @@ void OGL_ClearColorBuffer(float *color)
 {
     glClearColor(color[0], color[1], color[2], color[3]);
     glClear(GL_COLOR_BUFFER_BIT);
+}
+
+// ---- Core OpenGL Blit Resources (for FrameBuffer.cpp) ----
+static GLuint g_blitVAO = 0;
+static GLuint g_blitVBO = 0;
+static GLuint g_blitProgram = 0;
+static GLint g_blitUniOrtho = -1;
+static GLint g_blitUniTexture = -1;
+
+static const char *g_blitVS = R"(
+#version 330
+layout(location = 0) in vec2 aPos;
+layout(location = 1) in vec2 aTexCoord;
+uniform mat4 uOrtho;
+out vec2 vTexCoord;
+void main() {
+    gl_Position = uOrtho * vec4(aPos, 0.0, 1.0);
+    vTexCoord = aTexCoord;
+}
+)";
+
+static const char *g_blitFS = R"(
+#version 330
+in vec2 vTexCoord;
+uniform sampler2D uTexture;
+out vec4 FragColor;
+void main() {
+    FragColor = texture(uTexture, vTexCoord);
+}
+)";
+
+static GLuint CompileShader(GLenum type, const char *source)
+{
+    GLuint shader = glCreateShader(type);
+    const GLchar *src = source;
+    glShaderSource(shader, 1, &src, nullptr);
+    glCompileShader(shader);
+    GLint status;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+    if (!status)
+    {
+        char buf[512];
+        glGetShaderInfoLog(shader, 512, nullptr, buf);
+        std::string narrow(buf);
+        std::wstring wide(narrow.begin(), narrow.end());
+        g_ef->log_error(std::format(L"Shader compilation failed: {}", wide.c_str()).c_str());
+        glDeleteShader(shader);
+        return 0;
+    }
+    return shader;
+}
+
+void OGL_InitBlitResources()
+{
+    if (g_blitProgram) return;
+    GLuint vs = CompileShader(GL_VERTEX_SHADER, g_blitVS);
+    GLuint fs = CompileShader(GL_FRAGMENT_SHADER, g_blitFS);
+    if (!vs || !fs) return;
+    g_blitProgram = glCreateProgram();
+    glAttachShader(g_blitProgram, vs);
+    glAttachShader(g_blitProgram, fs);
+    glBindAttribLocation(g_blitProgram, 0, "aPos");
+    glBindAttribLocation(g_blitProgram, 1, "aTexCoord");
+    glLinkProgram(g_blitProgram);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    GLint linkStatus;
+    glGetProgramiv(g_blitProgram, GL_LINK_STATUS, &linkStatus);
+    if (!linkStatus)
+    {
+        char buf[512];
+        glGetProgramInfoLog(g_blitProgram, 512, nullptr, buf);
+        std::string narrow(buf);
+        std::wstring wide(narrow.begin(), narrow.end());
+        g_ef->log_error(std::format(L"Shader link failed: {}", wide.c_str()).c_str());
+        glDeleteProgram(g_blitProgram);
+        g_blitProgram = 0;
+        return;
+    }
+    g_blitUniOrtho = glGetUniformLocation(g_blitProgram, "uOrtho");
+    g_blitUniTexture = glGetUniformLocation(g_blitProgram, "uTexture");
+
+    glGenVertexArrays(1, &g_blitVAO);
+    glGenBuffers(1, &g_blitVBO);
+    glBindVertexArray(g_blitVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, g_blitVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, nullptr, GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
+    glBindVertexArray(0);
+}
+
+void OGL_DestroyBlitResources()
+{
+    if (g_blitVAO)
+    {
+        glDeleteVertexArrays(1, &g_blitVAO);
+        g_blitVAO = 0;
+    }
+    if (g_blitVBO)
+    {
+        glDeleteBuffers(1, &g_blitVBO);
+        g_blitVBO = 0;
+    }
+    if (g_blitProgram)
+    {
+        glDeleteProgram(g_blitProgram);
+        g_blitProgram = 0;
+    }
+    g_blitUniOrtho = -1;
+    g_blitUniTexture = -1;
+}
+
+void OGL_BlitTexture(GLuint texture, float x, float y, float w, float h, float u1, float v1)
+{
+    if (!g_blitProgram) OGL_InitBlitResources();
+    if (!g_blitProgram) return;
+
+    // Ortho(0, width, 0, height, -1, 1)
+    float r = (float)OGL.width;
+    float t = (float)OGL.height;
+    float ortho[16] = {2.0f / r, 0, 0, 0, 0, 2.0f / t, 0, 0, 0, 0, -1, 0, -1, -1, 0, 1};
+
+    float data[6 * 4] = {
+        x, y,     0.0f, 0.0f, x + w, y, u1, 0.0f, x,     y + h, 0.0f, v1,
+        x, y + h, 0.0f, v1,   x + w, y, u1, 0.0f, x + w, y + h, u1,   v1,
+    };
+
+    glUseProgram(g_blitProgram);
+    glUniformMatrix4fv(g_blitUniOrtho, 1, GL_FALSE, ortho);
+    glUniform1i(g_blitUniTexture, 0);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glBindVertexArray(g_blitVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, g_blitVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(data), data);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
 }
