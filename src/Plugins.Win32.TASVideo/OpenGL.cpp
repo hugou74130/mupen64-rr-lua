@@ -49,50 +49,46 @@ void OGL_InitExtensions()
 
 void OGL_InitStates()
 {
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
+    // Legacy fixed-function matrix setup removed — N64 vertices are already in
+    // clip-space and shaders handle projection via uniforms.
+    // TODO: if a projection matrix is ever needed, pass it as a uniform.
 
-    glVertexPointer(4, GL_FLOAT, sizeof(GLVertex), &OGL.vertices[0].x);
-    glEnableClientState(GL_VERTEX_ARRAY);
+    // NOTE: glVertexPointer / glColorPointer / glTexCoordPointer /
+    // glEnableClientState are deprecated in Core OpenGL. The N64 pipeline
+    // now uses a VAO/VBO with glVertexAttribPointer. The Combiner
+    // (glTexEnv) is still fix-function temporarily — full shaderization
+    // tracked in issue #665.
+    OGL_InitN64Resources();
+    if (!g_n64Program) return;
 
-    glColorPointer(4, GL_FLOAT, sizeof(GLVertex), &OGL.vertices[0].color.r);
-    glEnableClientState(GL_COLOR_ARRAY);
+    glBindVertexArray(g_n64VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, g_n64VBO);
 
-    if (OGL.EXT_secondary_color)
-    {
-        glSecondaryColorPointerEXT(3, GL_FLOAT, sizeof(GLVertex), &OGL.vertices[0].secondaryColor.r);
-        glEnableClientState(GL_SECONDARY_COLOR_ARRAY_EXT);
-    }
+    // Position (4 floats) — matches GLVertex layout exactly
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)0);
 
-    if (OGL.ARB_multitexture)
-    {
-        glClientActiveTextureARB(GL_TEXTURE0_ARB);
-        glTexCoordPointer(2, GL_FLOAT, sizeof(GLVertex), &OGL.vertices[0].s0);
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    // Primary color (4 floats)
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)(4 * sizeof(float)));
 
-        glClientActiveTextureARB(GL_TEXTURE1_ARB);
-        glTexCoordPointer(2, GL_FLOAT, sizeof(GLVertex), &OGL.vertices[0].s1);
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    }
-    else
-    {
-        glTexCoordPointer(2, GL_FLOAT, sizeof(GLVertex), &OGL.vertices[0].s0);
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    }
+    // Secondary color (4 floats — alpha kept for alignment)
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)(8 * sizeof(float)));
 
-    if (OGL.EXT_fog_coord)
-    {
-        glFogi(GL_FOG_COORDINATE_SOURCE_EXT, GL_FOG_COORDINATE_EXT);
+    // TexCoord0 (2 floats)
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)(12 * sizeof(float)));
 
-        glFogi(GL_FOG_MODE, GL_LINEAR);
-        glFogf(GL_FOG_START, 0.0f);
-        glFogf(GL_FOG_END, 255.0f);
+    // TexCoord1 (2 floats)
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)(14 * sizeof(float)));
 
-        glFogCoordPointerEXT(GL_FLOAT, sizeof(GLVertex), &OGL.vertices[0].fog);
-        glEnableClientState(GL_FOG_COORDINATE_ARRAY_EXT);
-    }
+    // Fog (1 float)
+    glEnableVertexAttribArray(5);
+    glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)(16 * sizeof(float)));
+
+    glBindVertexArray(0);
 
     glPolygonOffset(-3.0f, -3.0f);
 
@@ -619,13 +615,36 @@ void OGL_AddTriangle(SPVertex *vertices, int v0, int v1, int v2)
 
 void OGL_DrawTriangles()
 {
+    if (OGL.numVertices == 0) return;
+
     if (OGL.usePolygonStipple && (gDP.otherMode.alphaCompare == G_AC_DITHER) && !(gDP.otherMode.alphaCvgSel))
     {
         OGL.lastStipple = (OGL.lastStipple + 1) & 0x7;
         glPolygonStipple(OGL.stipplePattern[(BYTE)(gDP.envColor.a * 255.0f) >> 3][OGL.lastStipple]);
     }
 
-    glDrawArrays(GL_TRIANGLES, 0, OGL.numVertices);
+    // Core OpenGL: upload vertex data and draw with N64 shader
+    OGL_InitN64Resources();
+    if (g_n64Program)
+    {
+        glUseProgram(g_n64Program);
+        glUniform1i(g_n64UniUseTexture0, combiner.usesT0 ? GL_TRUE : GL_FALSE);
+        glUniform1i(g_n64UniUseTexture1, combiner.usesT1 ? GL_TRUE : GL_FALSE);
+        glUniform1i(g_n64UniTexture0, 0);
+        glUniform1i(g_n64UniTexture1, 1);
+
+        glBindVertexArray(g_n64VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, g_n64VBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(GLVertex) * OGL.numVertices, OGL.vertices);
+        glDrawArrays(GL_TRIANGLES, 0, OGL.numVertices);
+        glBindVertexArray(0);
+    }
+    else
+    {
+        // Fallback to legacy glDrawArrays if shader init failed
+        glDrawArrays(GL_TRIANGLES, 0, OGL.numVertices);
+    }
+
     OGL.numTriangles = OGL.numVertices = 0;
 }
 
@@ -783,6 +802,148 @@ void OGL_DestroyPrimitiveResources()
         g_primProgram = 0;
     }
     g_primUniOrtho = g_primUniUseOrtho = g_primUniUseTexture = g_primUniTexture0 = g_primUniTexture1 = -1;
+}
+
+// ---- Core OpenGL N64 Pipeline Resources (3D rendering) ----
+// NOTE: This is a placeholder shader for the N64 pipeline. The full N64
+// Combiner (2 cycles x RGB/Alpha x 16 sources) is not yet shaderized.
+// This basic shader does MODULATE (vertex_color * texture0) which covers
+// the most common case. Full combiner replication is tracked in issue #665.
+static GLuint g_n64VAO = 0;
+static GLuint g_n64VBO = 0;
+static GLuint g_n64Program = 0;
+static GLint g_n64UniTexture0 = -1;
+static GLint g_n64UniTexture1 = -1;
+static GLint g_n64UniUseTexture0 = -1;
+static GLint g_n64UniUseTexture1 = -1;
+
+static const char *g_n64VS = R"(
+#version 330
+layout(location = 0) in vec4 aPos;
+layout(location = 1) in vec4 aColor;
+layout(location = 2) in vec4 aSecondaryColor;
+layout(location = 3) in vec2 aTexCoord0;
+layout(location = 4) in vec2 aTexCoord1;
+layout(location = 5) in float aFog;
+
+out vec4 vColor;
+out vec4 vSecondaryColor;
+out vec2 vTexCoord0;
+out vec2 vTexCoord1;
+out float vFog;
+
+void main() {
+    gl_Position = aPos;
+    vColor = aColor;
+    vSecondaryColor = aSecondaryColor;
+    vTexCoord0 = aTexCoord0;
+    vTexCoord1 = aTexCoord1;
+    vFog = aFog;
+}
+)";
+
+static const char *g_n64FS = R"(
+#version 330
+in vec4 vColor;
+in vec4 vSecondaryColor;
+in vec2 vTexCoord0;
+in vec2 vTexCoord1;
+in float vFog;
+
+uniform sampler2D uTexture0;
+uniform sampler2D uTexture1;
+uniform bool uUseTexture0;
+uniform bool uUseTexture1;
+
+out vec4 FragColor;
+
+void main() {
+    vec4 color = vColor;
+    if (uUseTexture0) {
+        color = color * texture(uTexture0, vTexCoord0);
+    }
+    if (uUseTexture1) {
+        color = color * texture(uTexture1, vTexCoord1);
+    }
+    FragColor = vec4(color.rgb, color.a);
+}
+)";
+
+void OGL_InitN64Resources()
+{
+    if (g_n64Program) return;
+    GLuint vs = CompileShader(GL_VERTEX_SHADER, g_n64VS);
+    GLuint fs = CompileShader(GL_FRAGMENT_SHADER, g_n64FS);
+    if (!vs || !fs) return;
+    g_n64Program = glCreateProgram();
+    glAttachShader(g_n64Program, vs);
+    glAttachShader(g_n64Program, fs);
+    glBindAttribLocation(g_n64Program, 0, "aPos");
+    glBindAttribLocation(g_n64Program, 1, "aColor");
+    glBindAttribLocation(g_n64Program, 2, "aSecondaryColor");
+    glBindAttribLocation(g_n64Program, 3, "aTexCoord0");
+    glBindAttribLocation(g_n64Program, 4, "aTexCoord1");
+    glBindAttribLocation(g_n64Program, 5, "aFog");
+    glLinkProgram(g_n64Program);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    GLint linkStatus;
+    glGetProgramiv(g_n64Program, GL_LINK_STATUS, &linkStatus);
+    if (!linkStatus)
+    {
+        char buf[512];
+        glGetProgramInfoLog(g_n64Program, 512, nullptr, buf);
+        std::string narrow(buf);
+        std::wstring wide(narrow.begin(), narrow.end());
+        g_ef->log_error(std::format(L"N64 shader link failed: {}", wide.c_str()).c_str());
+        glDeleteProgram(g_n64Program);
+        g_n64Program = 0;
+        return;
+    }
+    g_n64UniTexture0 = glGetUniformLocation(g_n64Program, "uTexture0");
+    g_n64UniTexture1 = glGetUniformLocation(g_n64Program, "uTexture1");
+    g_n64UniUseTexture0 = glGetUniformLocation(g_n64Program, "uUseTexture0");
+    g_n64UniUseTexture1 = glGetUniformLocation(g_n64Program, "uUseTexture1");
+
+    glGenVertexArrays(1, &g_n64VAO);
+    glGenBuffers(1, &g_n64VBO);
+    glBindVertexArray(g_n64VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, g_n64VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLVertex) * 256, nullptr, GL_DYNAMIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)(4 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)(8 * sizeof(float)));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)(12 * sizeof(float)));
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)(14 * sizeof(float)));
+    glEnableVertexAttribArray(5);
+    glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)(16 * sizeof(float)));
+    glBindVertexArray(0);
+}
+
+void OGL_DestroyN64Resources()
+{
+    if (g_n64VAO)
+    {
+        glDeleteVertexArrays(1, &g_n64VAO);
+        g_n64VAO = 0;
+    }
+    if (g_n64VBO)
+    {
+        glDeleteBuffers(1, &g_n64VBO);
+        g_n64VBO = 0;
+    }
+    if (g_n64Program)
+    {
+        glDeleteProgram(g_n64Program);
+        g_n64Program = 0;
+    }
+    g_n64UniTexture0 = g_n64UniTexture1 = g_n64UniUseTexture0 = g_n64UniUseTexture1 = -1;
 }
 
 void OGL_DrawLine(SPVertex *vertices, int v0, int v1, float width)

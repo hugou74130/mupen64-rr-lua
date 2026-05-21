@@ -94,6 +94,10 @@ void OGL_ResizeWindow();
 void OGL_InitPrimitiveResources();
 void OGL_DestroyPrimitiveResources();
 
+// Core OpenGL N64 pipeline helpers (3D rendering)
+void OGL_InitN64Resources();
+void OGL_DestroyN64Resources();
+
 // Core OpenGL blit helpers (for FrameBuffer.cpp)
 void OGL_InitBlitResources();
 void OGL_DestroyBlitResources();
