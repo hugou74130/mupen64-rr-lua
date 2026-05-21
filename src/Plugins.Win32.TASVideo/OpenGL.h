@@ -90,7 +90,11 @@ void OGL_ClearDepthBuffer();
 void OGL_ClearColorBuffer(float *color);
 void OGL_ResizeWindow();
 
-// Core OpenGL blit helpers
+// Core OpenGL primitive helpers (lines, rects, textured rects)
+void OGL_InitPrimitiveResources();
+void OGL_DestroyPrimitiveResources();
+
+// Core OpenGL blit helpers (for FrameBuffer.cpp)
 void OGL_InitBlitResources();
 void OGL_DestroyBlitResources();
 void OGL_BlitTexture(GLuint texture, float x, float y, float w, float h, float u1, float v1);

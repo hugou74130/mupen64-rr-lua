@@ -629,6 +629,162 @@ void OGL_DrawTriangles()
     OGL.numTriangles = OGL.numVertices = 0;
 }
 
+// Forward declare CompileShader (defined later with blit resources)
+static GLuint CompileShader(GLenum type, const char *source);
+
+// ---- Core OpenGL Primitive Resources (lines, rects, textured rects) ----
+static GLuint g_primVAO = 0;
+static GLuint g_primVBO = 0;
+static GLuint g_primProgram = 0;
+static GLint g_primUniOrtho = -1;
+static GLint g_primUniUseOrtho = -1;
+static GLint g_primUniUseTexture = -1;
+static GLint g_primUniTexture0 = -1;
+static GLint g_primUniTexture1 = -1;
+
+static const char *g_primVS = R"(
+#version 330
+layout(location = 0) in vec4 aPos;
+layout(location = 1) in vec4 aColor;
+layout(location = 2) in vec2 aTexCoord0;
+layout(location = 3) in vec2 aTexCoord1;
+
+uniform mat4 uOrtho;
+uniform bool uUseOrtho;
+
+out vec4 vColor;
+out vec2 vTexCoord0;
+out vec2 vTexCoord1;
+
+void main() {
+    if (uUseOrtho)
+        gl_Position = uOrtho * aPos;
+    else
+        gl_Position = aPos;
+    vColor = aColor;
+    vTexCoord0 = aTexCoord0;
+    vTexCoord1 = aTexCoord1;
+}
+)";
+
+static const char *g_primFS = R"(
+#version 330
+in vec4 vColor;
+in vec2 vTexCoord0;
+in vec2 vTexCoord1;
+
+uniform sampler2D uTexture0;
+uniform sampler2D uTexture1;
+uniform bool uUseTexture;
+uniform bool uUseMultiTexture;
+
+out vec4 FragColor;
+
+void main() {
+    vec4 color = vColor;
+    if (uUseTexture) {
+        color = color * texture(uTexture0, vTexCoord0);
+        if (uUseMultiTexture)
+            color = color * texture(uTexture1, vTexCoord1);
+    }
+    FragColor = color;
+}
+)";
+
+static void OGL_GetOrthoMatrix(float *out)
+{
+    float w = (float)VI.width;
+    float h = (float)VI.height;
+    // Ortho(0, w, h, 0, -1, 1)
+    out[0] = 2.0f / w;
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 0;
+    out[4] = 0;
+    out[5] = -2.0f / h;
+    out[6] = 0;
+    out[7] = 0;
+    out[8] = 0;
+    out[9] = 0;
+    out[10] = 1;
+    out[11] = 0;
+    out[12] = -1;
+    out[13] = 1;
+    out[14] = 0;
+    out[15] = 1;
+}
+
+void OGL_InitPrimitiveResources()
+{
+    if (g_primProgram) return;
+    GLuint vs = CompileShader(GL_VERTEX_SHADER, g_primVS);
+    GLuint fs = CompileShader(GL_FRAGMENT_SHADER, g_primFS);
+    if (!vs || !fs) return;
+    g_primProgram = glCreateProgram();
+    glAttachShader(g_primProgram, vs);
+    glAttachShader(g_primProgram, fs);
+    glBindAttribLocation(g_primProgram, 0, "aPos");
+    glBindAttribLocation(g_primProgram, 1, "aColor");
+    glBindAttribLocation(g_primProgram, 2, "aTexCoord");
+    glLinkProgram(g_primProgram);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    GLint linkStatus;
+    glGetProgramiv(g_primProgram, GL_LINK_STATUS, &linkStatus);
+    if (!linkStatus)
+    {
+        char buf[512];
+        glGetProgramInfoLog(g_primProgram, 512, nullptr, buf);
+        std::string narrow(buf);
+        std::wstring wide(narrow.begin(), narrow.end());
+        g_ef->log_error(std::format(L"Primitive shader link failed: {}", wide.c_str()).c_str());
+        glDeleteProgram(g_primProgram);
+        g_primProgram = 0;
+        return;
+    }
+    g_primUniOrtho = glGetUniformLocation(g_primProgram, "uOrtho");
+    g_primUniUseOrtho = glGetUniformLocation(g_primProgram, "uUseOrtho");
+    g_primUniUseTexture = glGetUniformLocation(g_primProgram, "uUseTexture");
+    g_primUniTexture0 = glGetUniformLocation(g_primProgram, "uTexture0");
+    g_primUniTexture1 = glGetUniformLocation(g_primProgram, "uTexture1");
+
+    glGenVertexArrays(1, &g_primVAO);
+    glGenBuffers(1, &g_primVBO);
+    glBindVertexArray(g_primVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, g_primVBO);
+    // Max 6 vertices * (pos4 + color4 + texcoord0_2 + texcoord1_2) floats
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 12, nullptr, GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 12 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 12 * sizeof(float), (void *)(4 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 12 * sizeof(float), (void *)(8 * sizeof(float)));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 12 * sizeof(float), (void *)(10 * sizeof(float)));
+    glBindVertexArray(0);
+}
+
+void OGL_DestroyPrimitiveResources()
+{
+    if (g_primVAO)
+    {
+        glDeleteVertexArrays(1, &g_primVAO);
+        g_primVAO = 0;
+    }
+    if (g_primVBO)
+    {
+        glDeleteBuffers(1, &g_primVBO);
+        g_primVBO = 0;
+    }
+    if (g_primProgram)
+    {
+        glDeleteProgram(g_primProgram);
+        g_primProgram = 0;
+    }
+    g_primUniOrtho = g_primUniUseOrtho = g_primUniUseTexture = g_primUniTexture0 = g_primUniTexture1 = -1;
+}
+
 void OGL_DrawLine(SPVertex *vertices, int v0, int v1, float width)
 {
     int v[] = {v0, v1};
@@ -639,29 +795,45 @@ void OGL_DrawLine(SPVertex *vertices, int v0, int v1, float width)
 
     glLineWidth(width * OGL.scaleX);
 
-    glBegin(GL_LINES);
+    OGL_InitPrimitiveResources();
+    if (!g_primProgram) return;
+
+    float data[2 * 12] = {0};
     for (int i = 0; i < 2; i++)
     {
+        int base = i * 12;
+        // Position
+        data[base + 0] = vertices[v[i]].x;
+        data[base + 1] = vertices[v[i]].y;
+        data[base + 2] = vertices[v[i]].z;
+        data[base + 3] = vertices[v[i]].w;
+        // Color (with SetConstant applied)
         color.r = vertices[v[i]].r;
         color.g = vertices[v[i]].g;
         color.b = vertices[v[i]].b;
         color.a = vertices[v[i]].a;
         SetConstant(color, combiner.vertex.color, combiner.vertex.alpha);
-        glColor4fv(&color.r);
-
-        if (OGL.EXT_secondary_color)
-        {
-            color.r = vertices[v[i]].r;
-            color.g = vertices[v[i]].g;
-            color.b = vertices[v[i]].b;
-            color.a = vertices[v[i]].a;
-            SetConstant(color, combiner.vertex.secondaryColor, combiner.vertex.alpha);
-            glSecondaryColor3fvEXT(&color.r);
-        }
-
-        glVertex4f(vertices[v[i]].x, vertices[v[i]].y, vertices[v[i]].z, vertices[v[i]].w);
+        data[base + 4] = color.r;
+        data[base + 5] = color.g;
+        data[base + 6] = color.b;
+        data[base + 7] = color.a;
+        // TexCoord0 (unused for lines)
+        data[base + 8] = 0.0f;
+        data[base + 9] = 0.0f;
+        // TexCoord1 (unused for lines)
+        data[base + 10] = 0.0f;
+        data[base + 11] = 0.0f;
     }
-    glEnd();
+
+    glUseProgram(g_primProgram);
+    glUniform1i(g_primUniUseOrtho, GL_FALSE);
+    glUniform1i(g_primUniUseTexture, GL_FALSE);
+
+    glBindVertexArray(g_primVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, g_primVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(data), data);
+    glDrawArrays(GL_LINES, 0, 2);
+    glBindVertexArray(0);
 }
 
 void OGL_DrawRect(int ulx, int uly, int lrx, int lry, float *color)
@@ -670,25 +842,106 @@ void OGL_DrawRect(int ulx, int uly, int lrx, int lry, float *color)
 
     glDisable(GL_SCISSOR_TEST);
     glDisable(GL_CULL_FACE);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0, VI.width, VI.height, 0, 1.0f, -1.0f);
     glViewport(0, OGL.heightOffset, OGL.width, OGL.height);
     glDepthRange(0.0f, 1.0f);
 
-    glColor4f(color[0], color[1], color[2], color[3]);
+    OGL_InitPrimitiveResources();
+    if (!g_primProgram) return;
 
-    glBegin(GL_TRIANGLES);
-    glVertex4f(ulx, uly, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : 0.0f, 1.0f);
-    glVertex4f(lrx, uly, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : 0.0f, 1.0f);
-    glVertex4f(ulx, lry, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : 0.0f, 1.0f);
+    float ortho[16];
+    OGL_GetOrthoMatrix(ortho);
 
-    glVertex4f(lrx, uly, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : 0.0f, 1.0f);
-    glVertex4f(lrx, lry, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : 0.0f, 1.0f);
-    glVertex4f(ulx, lry, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : 0.0f, 1.0f);
-    glEnd();
+    float z = (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : 0.0f;
 
-    glLoadIdentity();
+    // Two triangles = 6 vertices
+    float data[6 * 12] = {
+        // Triangle 1
+        (float)ulx,
+        (float)uly,
+        z,
+        1.0f,
+        color[0],
+        color[1],
+        color[2],
+        color[3],
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        (float)lrx,
+        (float)uly,
+        z,
+        1.0f,
+        color[0],
+        color[1],
+        color[2],
+        color[3],
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        (float)ulx,
+        (float)lry,
+        z,
+        1.0f,
+        color[0],
+        color[1],
+        color[2],
+        color[3],
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        // Triangle 2
+        (float)lrx,
+        (float)uly,
+        z,
+        1.0f,
+        color[0],
+        color[1],
+        color[2],
+        color[3],
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        (float)lrx,
+        (float)lry,
+        z,
+        1.0f,
+        color[0],
+        color[1],
+        color[2],
+        color[3],
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        (float)ulx,
+        (float)lry,
+        z,
+        1.0f,
+        color[0],
+        color[1],
+        color[2],
+        color[3],
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+    };
+
+    glUseProgram(g_primProgram);
+    glUniformMatrix4fv(g_primUniOrtho, 1, GL_FALSE, ortho);
+    glUniform1i(g_primUniUseOrtho, GL_TRUE);
+    glUniform1i(g_primUniUseTexture, GL_FALSE);
+
+    glBindVertexArray(g_primVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, g_primVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(data), data);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+
     OGL_UpdateCullFace();
     OGL_UpdateViewport();
     glEnable(GL_SCISSOR_TEST);
@@ -725,9 +978,6 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
     OGL_UpdateStates();
 
     glDisable(GL_CULL_FACE);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0, VI.width, VI.height, 0, 1.0f, -1.0f);
     glViewport(0, OGL.heightOffset, OGL.width, OGL.height);
 
     if (combiner.usesT0)
@@ -763,15 +1013,9 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
 
         if ((rect[0].s0 >= 0.0f) && (rect[1].s0 <= cache.current[0]->width))
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
-        // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
 
         if ((rect[0].t0 >= 0.0f) && (rect[1].t0 <= cache.current[0]->height))
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        //		GLint height;
-
-        //		glGetTexLevelParameteriv( GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height );
 
         rect[0].s0 *= cache.current[0]->scaleS;
         rect[0].t0 *= cache.current[0]->scaleT;
@@ -835,53 +1079,145 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
     if (OGL.EXT_secondary_color)
         SetConstant(rect[0].secondaryColor, combiner.vertex.secondaryColor, combiner.vertex.alpha);
 
-    glBegin(GL_QUADS);
-    glColor4f(rect[0].color.r, rect[0].color.g, rect[0].color.b, rect[0].color.a);
-    if (OGL.EXT_secondary_color)
-        glSecondaryColor3fEXT(rect[0].secondaryColor.r, rect[0].secondaryColor.g, rect[0].secondaryColor.b);
+    // ---- Core OpenGL: build VBO and draw with shader ----
+    OGL_InitPrimitiveResources();
+    if (!g_primProgram) return;
 
-    if (OGL.ARB_multitexture)
+    float ortho[16];
+    OGL_GetOrthoMatrix(ortho);
+
+    // Compute per-vertex texcoords matching original glBegin(GL_QUADS) behavior
+    float t0_ul_s = rect[0].s0, t0_ul_t = rect[0].t0;
+    float t0_ur_s = rect[1].s0, t0_ur_t = rect[0].t0;
+    float t0_lr_s = rect[1].s0, t0_lr_t = rect[1].t0;
+    float t0_ll_s = rect[0].s0, t0_ll_t = rect[1].t0;
+
+    float t1_ul_s = rect[0].s1, t1_ul_t = rect[0].t1;
+    float t1_ur_s = rect[1].s1, t1_ur_t = rect[0].t1;
+    float t1_lr_s = rect[1].s1, t1_lr_t = rect[1].t1;
+    float t1_ll_s = rect[0].s1, t1_ll_t = rect[1].t1;
+
+    if (!OGL.ARB_multitexture)
     {
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, rect[0].s0, rect[0].t0);
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, rect[0].s1, rect[0].t1);
-        glVertex4f(rect[0].x, rect[0].y, rect[0].z, 1.0f);
-
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, rect[1].s0, rect[0].t0);
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, rect[1].s1, rect[0].t1);
-        glVertex4f(rect[1].x, rect[0].y, rect[0].z, 1.0f);
-
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, rect[1].s0, rect[1].t0);
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, rect[1].s1, rect[1].t1);
-        glVertex4f(rect[1].x, rect[1].y, rect[0].z, 1.0f);
-
-        glMultiTexCoord2fARB(GL_TEXTURE0_ARB, rect[0].s0, rect[1].t0);
-        glMultiTexCoord2fARB(GL_TEXTURE1_ARB, rect[0].s1, rect[1].t1);
-        glVertex4f(rect[0].x, rect[1].y, rect[0].z, 1.0f);
-    }
-    else
-    {
-        glTexCoord2f(rect[0].s0, rect[0].t0);
-        glVertex4f(rect[0].x, rect[0].y, rect[0].z, 1.0f);
-
+        // Non-multitexture path with flip (matches original logic exactly)
         if (flip)
-            glTexCoord2f(rect[1].s0, rect[0].t0);
+        {
+            t0_ur_s = rect[1].s0;
+            t0_ur_t = rect[0].t0;
+            t0_ll_s = rect[1].s0;
+            t0_ll_t = rect[0].t0;
+        }
         else
-            glTexCoord2f(rect[0].s0, rect[1].t0);
-
-        glVertex4f(rect[1].x, rect[0].y, rect[0].z, 1.0f);
-
-        glTexCoord2f(rect[1].s0, rect[1].t0);
-        glVertex4f(rect[1].x, rect[1].y, rect[0].z, 1.0f);
-
-        if (flip)
-            glTexCoord2f(rect[1].s0, rect[0].t0);
-        else
-            glTexCoord2f(rect[1].s0, rect[0].t0);
-        glVertex4f(rect[0].x, rect[1].y, rect[0].z, 1.0f);
+        {
+            t0_ur_s = rect[0].s0;
+            t0_ur_t = rect[1].t0;
+            t0_ll_s = rect[1].s0;
+            t0_ll_t = rect[0].t0;
+        }
     }
-    glEnd();
 
-    glLoadIdentity();
+    // All vertices share the same primary color (SetConstant was called once)
+    float rc = rect[0].color.r;
+    float gc = rect[0].color.g;
+    float bc = rect[0].color.b;
+    float ac = rect[0].color.a;
+
+    // Quad as 2 triangles (6 vertices): UL, UR, LL + UR, LR, LL
+    float data[6 * 12] = {
+        // Triangle 1: UL, UR, LL
+        rect[0].x,
+        rect[0].y,
+        rect[0].z,
+        1.0f,
+        rc,
+        gc,
+        bc,
+        ac,
+        t0_ul_s,
+        t0_ul_t,
+        t1_ul_s,
+        t1_ul_t,
+        rect[1].x,
+        rect[0].y,
+        rect[0].z,
+        1.0f,
+        rc,
+        gc,
+        bc,
+        ac,
+        t0_ur_s,
+        t0_ur_t,
+        t1_ur_s,
+        t1_ur_t,
+        rect[0].x,
+        rect[1].y,
+        rect[0].z,
+        1.0f,
+        rc,
+        gc,
+        bc,
+        ac,
+        t0_ll_s,
+        t0_ll_t,
+        t1_ll_s,
+        t1_ll_t,
+        // Triangle 2: UR, LR, LL
+        rect[1].x,
+        rect[0].y,
+        rect[0].z,
+        1.0f,
+        rc,
+        gc,
+        bc,
+        ac,
+        t0_ur_s,
+        t0_ur_t,
+        t1_ur_s,
+        t1_ur_t,
+        rect[1].x,
+        rect[1].y,
+        rect[0].z,
+        1.0f,
+        rc,
+        gc,
+        bc,
+        ac,
+        t0_lr_s,
+        t0_lr_t,
+        t1_lr_s,
+        t1_lr_t,
+        rect[0].x,
+        rect[1].y,
+        rect[0].z,
+        1.0f,
+        rc,
+        gc,
+        bc,
+        ac,
+        t0_ll_s,
+        t0_ll_t,
+        t1_ll_s,
+        t1_ll_t,
+    };
+
+    glUseProgram(g_primProgram);
+    glUniformMatrix4fv(g_primUniOrtho, 1, GL_FALSE, ortho);
+    glUniform1i(g_primUniUseOrtho, GL_TRUE);
+    glUniform1i(g_primUniUseTexture, combiner.usesT0 ? GL_TRUE : GL_FALSE);
+    glUniform1i(g_primUniTexture0, 0);
+    glUniform1i(g_primUniTexture1, 1);
+    glUniform1i(glGetUniformLocation(g_primProgram, "uUseMultiTexture"),
+                (combiner.usesT1 && OGL.ARB_multitexture) ? GL_TRUE : GL_FALSE);
+
+    glActiveTexture(GL_TEXTURE0);
+    if (OGL.ARB_multitexture) glActiveTextureARB(GL_TEXTURE0_ARB);
+
+    glBindVertexArray(g_primVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, g_primVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(data), data);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+
     OGL_UpdateCullFace();
     OGL_UpdateViewport();
 }
