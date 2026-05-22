@@ -14,6 +14,14 @@
 
 GLInfo OGL{};
 
+static GLuint g_n64VAO = 0;
+static GLuint g_n64VBO = 0;
+static GLuint g_n64Program = 0;
+static GLint g_n64UniTexture0 = -1;
+static GLint g_n64UniTexture1 = -1;
+static GLint g_n64UniUseTexture0 = -1;
+static GLint g_n64UniUseTexture1 = -1;
+
 void *gCapturedPixels; // pointer to buffer to fill
 
 void OGL_ReadPixels()
@@ -809,14 +817,6 @@ void OGL_DestroyPrimitiveResources()
 // Combiner (2 cycles x RGB/Alpha x 16 sources) is not yet shaderized.
 // This basic shader does MODULATE (vertex_color * texture0) which covers
 // the most common case. Full combiner replication is tracked in issue #665.
-static GLuint g_n64VAO = 0;
-static GLuint g_n64VBO = 0;
-static GLuint g_n64Program = 0;
-static GLint g_n64UniTexture0 = -1;
-static GLint g_n64UniTexture1 = -1;
-static GLint g_n64UniUseTexture0 = -1;
-static GLint g_n64UniUseTexture1 = -1;
-
 static const char *g_n64VS = R"(
 #version 330
 layout(location = 0) in vec4 aPos;
