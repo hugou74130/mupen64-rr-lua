@@ -138,7 +138,7 @@ void OGL_InitStates()
                                               ((i > (rand() >> 10)) << 1) | ((i > (rand() >> 10)) << 0);
     }
 
-    SwapBuffers(wglGetCurrentDC());
+    OGL_SwapBuffers();
 }
 
 void OGL_UpdateScale()
@@ -177,8 +177,9 @@ void OGL_ResizeWindow()
                  SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE);
 }
 
-bool OGL_InitContext()
+bool OGL_CreateContext()
 {
+#ifdef _WIN32
     int pixelFormat;
 
     PIXELFORMATDESCRIPTOR pfd = {
@@ -245,13 +246,24 @@ bool OGL_InitContext()
         return FALSE;
     }
 
-    OGL_InitExtensions();
-    OGL_InitStates();
     return TRUE;
+#elif defined(USE_GLFW)
+    // TODO: GLFW context creation for Linux / macOS
+    g_view_logger->warn(L"GLFW backend not yet implemented");
+    return FALSE;
+#elif defined(USE_EGL)
+    // TODO: EGL context creation for ANGLE / Linux
+    g_view_logger->warn(L"EGL backend not yet implemented");
+    return FALSE;
+#else
+    g_view_logger->error(L"No OpenGL context backend available");
+    return FALSE;
+#endif
 }
 
-bool OGL_DestroyContext()
+bool OGL_DestroyContextImpl()
 {
+#ifdef _WIN32
     wglMakeCurrent(NULL, NULL);
 
     if (OGL.hRC)
@@ -267,6 +279,40 @@ bool OGL_DestroyContext()
     }
 
     return TRUE;
+#elif defined(USE_GLFW)
+    // TODO: GLFW cleanup
+    return TRUE;
+#elif defined(USE_EGL)
+    // TODO: EGL cleanup
+    return TRUE;
+#else
+    return TRUE;
+#endif
+}
+
+void OGL_SwapBuffers()
+{
+#ifdef _WIN32
+    if (OGL.hDC) SwapBuffers(OGL.hDC);
+#elif defined(USE_GLFW)
+    // TODO: glfwSwapBuffers(OGL.glfwWindow);
+#elif defined(USE_EGL)
+    // TODO: eglSwapBuffers(OGL.eglDisplay, OGL.eglSurface);
+#endif
+}
+
+bool OGL_InitContext()
+{
+    if (!OGL_CreateContext()) return FALSE;
+
+    OGL_InitExtensions();
+    OGL_InitStates();
+    return TRUE;
+}
+
+bool OGL_DestroyContext()
+{
+    return OGL_DestroyContextImpl();
 }
 
 bool OGL_Start()
@@ -303,7 +349,7 @@ void OGL_Stop()
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     glFinish();
-    SwapBuffers(OGL.hDC);
+    OGL_SwapBuffers();
 
     if (!OGL.recycle_context)
     {
