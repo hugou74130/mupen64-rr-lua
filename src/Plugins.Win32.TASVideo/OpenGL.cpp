@@ -22,6 +22,29 @@ static GLint g_n64UniTexture1 = -1;
 static GLint g_n64UniUseTexture0 = -1;
 static GLint g_n64UniUseTexture1 = -1;
 
+// N64 uber-combiner uniforms
+static GLint g_n64UniPrimColor = -1;
+static GLint g_n64UniEnvColor = -1;
+static GLint g_n64UniPrimLODFrac = -1;
+static GLint g_n64UniFogColor = -1;
+static GLint g_n64UniFogEnabled = -1;
+static GLint g_n64UniFogMultiplier = -1;
+static GLint g_n64UniFogOffset = -1;
+static GLint g_n64UniAlphaTestEnabled = -1;
+static GLint g_n64UniAlphaTestThreshold = -1;
+static GLint g_n64UniAlphaTestFunction = -1;
+static GLint g_n64UniStippleEnabled = -1;
+static GLint g_n64UniStipplePattern = -1;
+// Combiner: packed (A,B,C,D) per cycle per channel
+static GLint g_n64UniCombine0RGB = -1;
+static GLint g_n64UniCombine0A = -1;
+static GLint g_n64UniCombine1RGB = -1;
+static GLint g_n64UniCombine1A = -1;
+static GLint g_n64UniNumCycles = -1;
+
+// Global combiner state, filled by unified_combiner and consumed by OGL_DrawTriangles
+static N64CombinerState g_n64State;
+
 void *gCapturedPixels; // pointer to buffer to fill
 
 void OGL_ReadPixels()
@@ -64,8 +87,8 @@ void OGL_InitStates()
     // NOTE: glVertexPointer / glColorPointer / glTexCoordPointer /
     // glEnableClientState are deprecated in Core OpenGL. The N64 pipeline
     // now uses a VAO/VBO with glVertexAttribPointer. The Combiner
-    // (glTexEnv) is still fix-function temporarily — full shaderization
-    // tracked in issue #665.
+    // (glTexEnv) has been shaderized — see unified_combiner.cpp and
+    // OGL_SetN64Combiner().
     OGL_InitN64Resources();
     if (!g_n64Program) return;
 
@@ -325,10 +348,9 @@ void OGL_UpdateStates()
     {
         OGL_UpdateCullFace();
 
-        if ((gSP.geometryMode & G_FOG) && OGL.EXT_fog_coord && OGL.fog)
-            glEnable(GL_FOG);
-        else
-            glDisable(GL_FOG);
+        // Fog is now handled in the uber-combiner fragment shader via
+        // uFogEnabled / uFogColor / uFogMultiplier / uFogOffset uniforms.
+        // The fixed-function GL_FOG enable/disable is deprecated in Core GL.
 
         gSP.changed &= ~CHANGED_GEOMETRYMODE;
     }
@@ -358,28 +380,17 @@ void OGL_UpdateStates()
 
     if ((gDP.changed & CHANGED_ALPHACOMPARE) || (gDP.changed & CHANGED_RENDERMODE))
     {
-        // Enable alpha test for threshold mode
-        if ((gDP.otherMode.alphaCompare == G_AC_THRESHOLD) && !(gDP.otherMode.alphaCvgSel))
-        {
-            glEnable(GL_ALPHA_TEST);
+        // Alpha test and polygon stipple are now handled in the uber-combiner
+        // fragment shader via uniforms (uAlphaTestEnabled, uAlphaTestThreshold,
+        // uPolygonStippleEnabled, uStipplePattern).
+        // The fixed-function glAlphaFunc, GL_ALPHA_TEST and GL_POLYGON_STIPPLE
+        // are deprecated in Core OpenGL / unavailable in GLES.
 
-            glAlphaFunc((gDP.blendColor.a > 0.0f) ? GL_GEQUAL : GL_GREATER, gDP.blendColor.a);
-        }
-        // Used in TEX_EDGE and similar render modes
-        else if (gDP.otherMode.cvgXAlpha)
-        {
-            glEnable(GL_ALPHA_TEST);
-
-            // Arbitrary number -- gives nice results though
-            glAlphaFunc(GL_GEQUAL, 0.5f);
-        }
-        else
-            glDisable(GL_ALPHA_TEST);
-
-        if (OGL.usePolygonStipple && (gDP.otherMode.alphaCompare == G_AC_DITHER) && !(gDP.otherMode.alphaCvgSel))
-            glEnable(GL_POLYGON_STIPPLE);
-        else
-            glDisable(GL_POLYGON_STIPPLE);
+        // Legacy alpha test and stipple state tracking kept for reference
+        // but actual implementation is shader-based.
+        (void)(gDP.otherMode.alphaCompare);
+        (void)(gDP.otherMode.alphaCvgSel);
+        (void)(gDP.otherMode.cvgXAlpha);
     }
 
     if (gDP.changed & CHANGED_SCISSOR)
@@ -441,7 +452,12 @@ void OGL_UpdateStates()
         Combiner_EndTextureUpdate();
     }
 
-    if ((gDP.changed & CHANGED_FOGCOLOR) && OGL.fog) glFogfv(GL_FOG_COLOR, &gDP.fogColor.r);
+    // Fog color is now handled in the uber-combiner fragment shader via
+    // the uFogColor uniform. glFogfv is deprecated in Core OpenGL.
+    if ((gDP.changed & CHANGED_FOGCOLOR) && OGL.fog)
+    {
+        // Shader uniform uFogColor is updated via OGL_SetN64Combiner()
+    }
 
     if ((gDP.changed & CHANGED_RENDERMODE) || (gDP.changed & CHANGED_CYCLETYPE))
     {
@@ -625,13 +641,23 @@ void OGL_DrawTriangles()
 {
     if (OGL.numVertices == 0) return;
 
+    // ---- Build combiner state (replaces fixed-function glTexEnv / glAlphaFunc / glFog) ----
+    N64CombinerState &state = g_n64State;
+
+    // Stipple
     if (OGL.usePolygonStipple && (gDP.otherMode.alphaCompare == G_AC_DITHER) && !(gDP.otherMode.alphaCvgSel))
     {
         OGL.lastStipple = (OGL.lastStipple + 1) & 0x7;
-        glPolygonStipple(OGL.stipplePattern[(BYTE)(gDP.envColor.a * 255.0f) >> 3][OGL.lastStipple]);
+        state.stippleEnabled = 1;
+        state.stipplePattern = OGL.lastStipple;
+    }
+    else
+    {
+        state.stippleEnabled = 0;
+        state.stipplePattern = 0;
     }
 
-    // Core OpenGL: upload vertex data and draw with N64 shader
+    // Core OpenGL: upload vertex data and draw with N64 uber-combiner shader
     OGL_InitN64Resources();
     if (g_n64Program)
     {
@@ -641,16 +667,14 @@ void OGL_DrawTriangles()
         glUniform1i(g_n64UniTexture0, 0);
         glUniform1i(g_n64UniTexture1, 1);
 
+        // Upload full combiner state (colors, fog, alpha test, stipple, combiner config)
+        OGL_SetN64Combiner(&state);
+
         glBindVertexArray(g_n64VAO);
         glBindBuffer(GL_ARRAY_BUFFER, g_n64VBO);
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(GLVertex) * OGL.numVertices, OGL.vertices);
         glDrawArrays(GL_TRIANGLES, 0, OGL.numVertices);
         glBindVertexArray(0);
-    }
-    else
-    {
-        // Fallback to legacy glDrawArrays if shader init failed
-        glDrawArrays(GL_TRIANGLES, 0, OGL.numVertices);
     }
 
     OGL.numTriangles = OGL.numVertices = 0;
@@ -669,8 +693,11 @@ static GLint g_primUniUseTexture = -1;
 static GLint g_primUniTexture0 = -1;
 static GLint g_primUniTexture1 = -1;
 
-static const char *g_primVS = R"(
-#version 330
+static const char *g_primVS = GLSL_VERSION_HEADER R"(
+#ifdef GL_ES
+precision highp float;
+#endif
+
 layout(location = 0) in vec4 aPos;
 layout(location = 1) in vec4 aColor;
 layout(location = 2) in vec2 aTexCoord0;
@@ -694,8 +721,12 @@ void main() {
 }
 )";
 
-static const char *g_primFS = R"(
-#version 330
+static const char *g_primFS = GLSL_VERSION_HEADER R"(
+#ifdef GL_ES
+precision mediump float;
+precision mediump sampler2D;
+#endif
+
 in vec4 vColor;
 in vec2 vTexCoord0;
 in vec2 vTexCoord1;
@@ -813,12 +844,20 @@ void OGL_DestroyPrimitiveResources()
 }
 
 // ---- Core OpenGL N64 Pipeline Resources (3D rendering) ----
-// NOTE: This is a placeholder shader for the N64 pipeline. The full N64
-// Combiner (2 cycles x RGB/Alpha x 16 sources) is not yet shaderized.
-// This basic shader does MODULATE (vertex_color * texture0) which covers
-// the most common case. Full combiner replication is tracked in issue #665.
-static const char *g_n64VS = R"(
-#version 330
+// Uber-combiner shader: replaces all glTexEnv/GL_COMBINE_ARB, glAlphaFunc,
+// glFog* and glPolygonStipple fixed-function pipeline.
+// Targets OpenGL 3.3 Core / GLES 3.0 / ANGLE.
+#ifdef USE_OPENGL_ES
+#define GLSL_VERSION_HEADER "#version 300 es\n"
+#else
+#define GLSL_VERSION_HEADER "#version 330 core\n"
+#endif
+
+static const char *g_n64VS = GLSL_VERSION_HEADER R"(
+#ifdef GL_ES
+precision highp float;
+#endif
+
 layout(location = 0) in vec4 aPos;
 layout(location = 1) in vec4 aColor;
 layout(location = 2) in vec4 aSecondaryColor;
@@ -842,30 +881,147 @@ void main() {
 }
 )";
 
-static const char *g_n64FS = R"(
-#version 330
+static const char *g_n64FS = GLSL_VERSION_HEADER R"(
+#ifdef GL_ES
+precision mediump float;
+precision mediump sampler2D;
+#endif
+
+#define UC_COMBINED       0
+#define UC_TEXEL0         1
+#define UC_TEXEL1         2
+#define UC_PRIMITIVE      3
+#define UC_SHADE          4
+#define UC_ENVIRONMENT    5
+#define UC_CENTER         6
+#define UC_ONE            7
+#define UC_COMBINED_ALPHA 8
+#define UC_TEXEL0_ALPHA   9
+#define UC_TEXEL1_ALPHA   10
+#define UC_PRIM_ALPHA     11
+#define UC_SHADE_ALPHA    12
+#define UC_ENV_ALPHA      13
+#define UC_LOD_FRACTION   14
+#define UC_PRIM_LOD_FRAC  15
+#define UC_K4             16
+#define UC_K5             17
+#define UC_ZERO           18
+#define UC_HALF           19
+
+uniform sampler2D uTexture0;
+uniform sampler2D uTexture1;
+uniform bool      uUseTexture0;
+uniform bool      uUseTexture1;
+
+uniform vec4  uPrimColor;
+uniform vec4  uEnvColor;
+uniform float uPrimLODFrac;
+
+uniform vec4  uFogColor;
+uniform bool  uFogEnabled;
+uniform float uFogMultiplier;
+uniform float uFogOffset;
+
+uniform bool  uAlphaTestEnabled;
+uniform float uAlphaTestThreshold;
+uniform int   uAlphaTestFunction;
+
+uniform bool uPolygonStippleEnabled;
+uniform int  uStipplePattern;
+
+uniform ivec4 uCombine0RGB;
+uniform ivec4 uCombine0A;
+uniform ivec4 uCombine1RGB;
+uniform ivec4 uCombine1A;
+uniform int   uNumCycles;
+
 in vec4 vColor;
 in vec4 vSecondaryColor;
 in vec2 vTexCoord0;
 in vec2 vTexCoord1;
 in float vFog;
 
-uniform sampler2D uTexture0;
-uniform sampler2D uTexture1;
-uniform bool uUseTexture0;
-uniform bool uUseTexture1;
-
 out vec4 FragColor;
 
+vec4 resolveInput(int src, vec4 texel0, vec4 texel1, vec4 combined, vec4 shade) {
+    switch (src) {
+        case UC_COMBINED:        return combined;
+        case UC_TEXEL0:          return texel0;
+        case UC_TEXEL1:          return texel1;
+        case UC_PRIMITIVE:       return uPrimColor;
+        case UC_SHADE:           return shade;
+        case UC_ENVIRONMENT:     return uEnvColor;
+        case UC_CENTER:          return vec4(0.5, 0.5, 0.5, 0.5);
+        case UC_ONE:             return vec4(1.0, 1.0, 1.0, 1.0);
+        case UC_COMBINED_ALPHA:  return vec4(combined.a);
+        case UC_TEXEL0_ALPHA:    return vec4(texel0.a);
+        case UC_TEXEL1_ALPHA:    return vec4(texel1.a);
+        case UC_PRIM_ALPHA:      return vec4(uPrimColor.a);
+        case UC_SHADE_ALPHA:     return vec4(shade.a);
+        case UC_ENV_ALPHA:       return vec4(uEnvColor.a);
+        case UC_LOD_FRACTION:    return vec4(uPrimLODFrac);
+        case UC_PRIM_LOD_FRAC:   return vec4(uPrimLODFrac);
+        case UC_K4:              return vec4(1.0, 1.0, 1.0, 1.0);
+        case UC_K5:              return vec4(0.5, 0.5, 0.5, 0.5);
+        case UC_HALF:            return vec4(0.5, 0.5, 0.5, 0.5);
+        case UC_ZERO:            return vec4(0.0, 0.0, 0.0, 0.0);
+        default:                 return vec4(0.0, 0.0, 0.0, 0.0);
+    }
+}
+
+vec4 combinerCycle(ivec4 rgbABCD, ivec4 alphaABCD,
+                   vec4 texel0, vec4 texel1, vec4 prev, vec4 shade) {
+    vec4 aRGB = resolveInput(rgbABCD.x, texel0, texel1, prev, shade);
+    vec4 bRGB = resolveInput(rgbABCD.y, texel0, texel1, prev, shade);
+    vec4 cRGB = resolveInput(rgbABCD.z, texel0, texel1, prev, shade);
+    vec4 dRGB = resolveInput(rgbABCD.w, texel0, texel1, prev, shade);
+    vec3 rgb  = clamp((aRGB.rgb - bRGB.rgb) * cRGB.rgb + dRGB.rgb, 0.0, 1.0);
+
+    float aA = resolveInput(alphaABCD.x, texel0, texel1, prev, shade).a;
+    float bA = resolveInput(alphaABCD.y, texel0, texel1, prev, shade).a;
+    float cA = resolveInput(alphaABCD.z, texel0, texel1, prev, shade).a;
+    float dA = resolveInput(alphaABCD.w, texel0, texel1, prev, shade).a;
+    float alpha = clamp((aA - bA) * cA + dA, 0.0, 1.0);
+
+    return vec4(rgb, alpha);
+}
+
 void main() {
-    vec4 color = vColor;
-    if (uUseTexture0) {
-        color = color * texture(uTexture0, vTexCoord0);
+    vec4 texel0 = vec4(1.0);
+    vec4 texel1 = vec4(1.0);
+    if (uUseTexture0) texel0 = texture(uTexture0, vTexCoord0);
+    if (uUseTexture1) texel1 = texture(uTexture1, vTexCoord1);
+
+    vec4 shade = vColor;
+    vec4 combined = shade;
+
+    combined = combinerCycle(uCombine0RGB, uCombine0A, texel0, texel1, combined, shade);
+    if (uNumCycles >= 2) {
+        combined = combinerCycle(uCombine1RGB, uCombine1A, texel0, texel1, combined, shade);
     }
-    if (uUseTexture1) {
-        color = color * texture(uTexture1, vTexCoord1);
+
+    if (uFogEnabled) {
+        float fogFactor = clamp(vFog, 0.0, 1.0);
+        combined.rgb = mix(combined.rgb, uFogColor.rgb, fogFactor);
     }
-    FragColor = vec4(color.rgb, color.a);
+
+    if (uAlphaTestEnabled) {
+        bool pass = true;
+        if (uAlphaTestFunction == 1)
+            pass = combined.a >= uAlphaTestThreshold;
+        else if (uAlphaTestFunction == 2)
+            pass = combined.a > uAlphaTestThreshold;
+        if (!pass) discard;
+    }
+
+    if (uPolygonStippleEnabled) {
+        int sx = int(mod(gl_FragCoord.x, 8.0));
+        int sy = int(mod(gl_FragCoord.y, 4.0));
+        int bit = (uStipplePattern >> (sy * 8 + sx)) & 1;
+        if (bit == 0) discard;
+    }
+
+    FragColor = combined;
 }
 )";
 
@@ -904,6 +1060,25 @@ void OGL_InitN64Resources()
     g_n64UniTexture1 = glGetUniformLocation(g_n64Program, "uTexture1");
     g_n64UniUseTexture0 = glGetUniformLocation(g_n64Program, "uUseTexture0");
     g_n64UniUseTexture1 = glGetUniformLocation(g_n64Program, "uUseTexture1");
+
+    // N64 uber-combiner uniform locations
+    g_n64UniPrimColor      = glGetUniformLocation(g_n64Program, "uPrimColor");
+    g_n64UniEnvColor       = glGetUniformLocation(g_n64Program, "uEnvColor");
+    g_n64UniPrimLODFrac    = glGetUniformLocation(g_n64Program, "uPrimLODFrac");
+    g_n64UniFogColor       = glGetUniformLocation(g_n64Program, "uFogColor");
+    g_n64UniFogEnabled     = glGetUniformLocation(g_n64Program, "uFogEnabled");
+    g_n64UniFogMultiplier  = glGetUniformLocation(g_n64Program, "uFogMultiplier");
+    g_n64UniFogOffset      = glGetUniformLocation(g_n64Program, "uFogOffset");
+    g_n64UniAlphaTestEnabled   = glGetUniformLocation(g_n64Program, "uAlphaTestEnabled");
+    g_n64UniAlphaTestThreshold = glGetUniformLocation(g_n64Program, "uAlphaTestThreshold");
+    g_n64UniAlphaTestFunction  = glGetUniformLocation(g_n64Program, "uAlphaTestFunction");
+    g_n64UniStippleEnabled = glGetUniformLocation(g_n64Program, "uPolygonStippleEnabled");
+    g_n64UniStipplePattern = glGetUniformLocation(g_n64Program, "uStipplePattern");
+    g_n64UniCombine0RGB    = glGetUniformLocation(g_n64Program, "uCombine0RGB");
+    g_n64UniCombine0A      = glGetUniformLocation(g_n64Program, "uCombine0A");
+    g_n64UniCombine1RGB    = glGetUniformLocation(g_n64Program, "uCombine1RGB");
+    g_n64UniCombine1A      = glGetUniformLocation(g_n64Program, "uCombine1A");
+    g_n64UniNumCycles      = glGetUniformLocation(g_n64Program, "uNumCycles");
 
     glGenVertexArrays(1, &g_n64VAO);
     glGenBuffers(1, &g_n64VBO);
@@ -944,6 +1119,13 @@ void OGL_DestroyN64Resources()
         g_n64Program = 0;
     }
     g_n64UniTexture0 = g_n64UniTexture1 = g_n64UniUseTexture0 = g_n64UniUseTexture1 = -1;
+    g_n64UniPrimColor = g_n64UniEnvColor = g_n64UniPrimLODFrac = g_n64UniFogColor = -1;
+    g_n64UniFogEnabled = g_n64UniFogMultiplier = g_n64UniFogOffset = -1;
+    g_n64UniAlphaTestEnabled = g_n64UniAlphaTestThreshold = g_n64UniAlphaTestFunction = -1;
+    g_n64UniStippleEnabled = g_n64UniStipplePattern = -1;
+    g_n64UniCombine0RGB = g_n64UniCombine0A = g_n64UniCombine1RGB = g_n64UniCombine1A = -1;
+    g_n64UniNumCycles = -1;
+    memset(&g_n64State, 0, sizeof(g_n64State));
 }
 
 void OGL_DrawLine(SPVertex *vertices, int v0, int v1, float width)
@@ -1170,7 +1352,7 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
             rect[1].t0 = cache.current[0]->offsetT - rect[1].t0;
         }
 
-        if (OGL.ARB_multitexture) glActiveTextureARB(GL_TEXTURE0_ARB);
+        if (OGL.ARB_multitexture) glActiveTexture(GL_TEXTURE0);
 
         if ((rect[0].s0 >= 0.0f) && (rect[1].s0 <= cache.current[0]->width))
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1213,7 +1395,7 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
             rect[1].t1 = cache.current[1]->offsetT - rect[1].t1;
         }
 
-        glActiveTextureARB(GL_TEXTURE1_ARB);
+        glActiveTexture(GL_TEXTURE1);
 
         if ((rect[0].s1 == 0.0f) && (rect[1].s1 <= cache.current[1]->width))
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1229,7 +1411,7 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
 
     if ((gDP.otherMode.cycleType == G_CYC_COPY) && !OGL.forceBilinear)
     {
-        if (OGL.ARB_multitexture) glActiveTextureARB(GL_TEXTURE0_ARB);
+        if (OGL.ARB_multitexture) glActiveTexture(GL_TEXTURE0);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -1371,7 +1553,7 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
                 (combiner.usesT1 && OGL.ARB_multitexture) ? GL_TRUE : GL_FALSE);
 
     glActiveTexture(GL_TEXTURE0);
-    if (OGL.ARB_multitexture) glActiveTextureARB(GL_TEXTURE0_ARB);
+    if (OGL.ARB_multitexture) glActiveTexture(GL_TEXTURE0);
 
     glBindVertexArray(g_primVAO);
     glBindBuffer(GL_ARRAY_BUFFER, g_primVBO);
@@ -1406,8 +1588,11 @@ static GLuint g_blitProgram = 0;
 static GLint g_blitUniOrtho = -1;
 static GLint g_blitUniTexture = -1;
 
-static const char *g_blitVS = R"(
-#version 330
+static const char *g_blitVS = GLSL_VERSION_HEADER R"(
+#ifdef GL_ES
+precision highp float;
+#endif
+
 layout(location = 0) in vec2 aPos;
 layout(location = 1) in vec2 aTexCoord;
 uniform mat4 uOrtho;
@@ -1418,8 +1603,12 @@ void main() {
 }
 )";
 
-static const char *g_blitFS = R"(
-#version 330
+static const char *g_blitFS = GLSL_VERSION_HEADER R"(
+#ifdef GL_ES
+precision mediump float;
+precision mediump sampler2D;
+#endif
+
 in vec2 vTexCoord;
 uniform sampler2D uTexture;
 out vec4 FragColor;
@@ -1539,4 +1728,57 @@ void OGL_BlitTexture(GLuint texture, float x, float y, float w, float h, float u
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(data), data);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
+}
+
+// ---- N64 Combiner Uniform Upload (replaces fixed-function glTexEnv) ----
+
+void OGL_SetN64Combiner(const N64CombinerState *state)
+{
+    OGL_InitN64Resources();
+    if (!g_n64Program) return;
+
+    glUseProgram(g_n64Program);
+
+    // Colors
+    if (g_n64UniPrimColor >= 0) glUniform4fv(g_n64UniPrimColor, 1, state->primColor);
+    if (g_n64UniEnvColor >= 0) glUniform4fv(g_n64UniEnvColor, 1, state->envColor);
+    if (g_n64UniPrimLODFrac >= 0) glUniform1f(g_n64UniPrimLODFrac, state->primLODFrac);
+    if (g_n64UniFogColor >= 0) glUniform4fv(g_n64UniFogColor, 1, state->fogColor);
+
+    // Fog
+    if (g_n64UniFogEnabled >= 0) glUniform1i(g_n64UniFogEnabled, state->fogEnabled);
+    if (g_n64UniFogMultiplier >= 0) glUniform1f(g_n64UniFogMultiplier, state->fogMultiplier);
+    if (g_n64UniFogOffset >= 0) glUniform1f(g_n64UniFogOffset, state->fogOffset);
+
+    // Alpha test
+    if (g_n64UniAlphaTestEnabled >= 0) glUniform1i(g_n64UniAlphaTestEnabled, state->alphaTestEnabled);
+    if (g_n64UniAlphaTestThreshold >= 0) glUniform1f(g_n64UniAlphaTestThreshold, state->alphaTestThreshold);
+    if (g_n64UniAlphaTestFunction >= 0) glUniform1i(g_n64UniAlphaTestFunction, state->alphaTestFunction);
+
+    // Polygon stipple
+    if (g_n64UniStippleEnabled >= 0) glUniform1i(g_n64UniStippleEnabled, state->stippleEnabled);
+    if (g_n64UniStipplePattern >= 0) glUniform1i(g_n64UniStipplePattern, state->stipplePattern);
+
+    // Combiner: pack canonical (A, B, C, D) into ivec4 uniforms per cycle per channel
+    if (g_n64UniCombine0RGB >= 0)
+        glUniform4i(g_n64UniCombine0RGB, state->saRGB0, state->sbRGB0, state->mRGB0, state->aRGB0);
+    if (g_n64UniCombine0A >= 0)
+        glUniform4i(g_n64UniCombine0A, state->saA0, state->sbA0, state->mA0, state->aA0);
+    if (g_n64UniCombine1RGB >= 0)
+        glUniform4i(g_n64UniCombine1RGB, state->saRGB1, state->sbRGB1, state->mRGB1, state->aRGB1);
+    if (g_n64UniCombine1A >= 0)
+        glUniform4i(g_n64UniCombine1A, state->saA1, state->sbA1, state->mA1, state->aA1);
+    if (g_n64UniNumCycles >= 0)
+        glUniform1i(g_n64UniNumCycles, state->numCycles);
+}
+
+void OGL_UpdateN64CombinerColors(void)
+{
+    // Re-upload current combiner state with updated colors.
+    // The full state is re-uploaded for simplicity; the driver will
+    // filter out uniforms that haven't changed.
+    if (combiner.current && combiner.current->compiled)
+    {
+        Set_unified_combiner(combiner.current->compiled);
+    }
 }

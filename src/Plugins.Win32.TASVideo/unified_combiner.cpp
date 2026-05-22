@@ -5,6 +5,15 @@
 #include "Textures.h"
 #include "gDP.h"
 
+// ---------------------------------------------------------------------------
+// Legacy texture-env stage descriptors.
+//
+// These structs and tables are kept intact because Compile() still uses them
+// to derive the per-combiner flags (usesT0, usesT1, vertex colour source)
+// that the rest of the pipeline reads.  The GL-source/operand fields are no
+// longer passed to glTexEnv — they are simply dead storage after Compile().
+// ---------------------------------------------------------------------------
+
 struct UCTexArg
 {
     GLenum source, operand;
@@ -29,6 +38,16 @@ struct UnifiedCompiledCombiner
     } vertex;
     UCTexStage color[8];
     UCTexStage alpha[8];
+
+    // NEW: Canonical combiner inputs for direct shader upload.
+    // These are decoded from gDP.combine.mux in Compile() and uploaded
+    // as uniforms in Set().  They represent the original (A-B)*C+D form
+    // before stage simplification.
+    int saRGB0, sbRGB0, mRGB0, aRGB0;
+    int saA0, sbA0, mA0, aA0;
+    int saRGB1, sbRGB1, mRGB1, aRGB1;
+    int saA1, sbA1, mA1, aA1;
+    int numCycles;
 };
 
 static UCTexArg TexEnvArgs[] = {
@@ -143,33 +162,19 @@ static UCTexArg TexEnvArgs[] = {
 static void Init()
 {
     for (int i = 0; i < OGL.maxTextureUnits; i++) TextureCache_ActivateDummy(i);
-
-    // TEXTURE_ENV_COMBINE is now required
-    TexEnvArgs[TEXEL0].source = GL_TEXTURE0_ARB;
-    TexEnvArgs[TEXEL0_ALPHA].source = GL_TEXTURE0_ARB;
-    TexEnvArgs[TEXEL1].source = GL_TEXTURE1_ARB;
-    TexEnvArgs[TEXEL1_ALPHA].source = GL_TEXTURE1_ARB;
 }
 
 static void Uninit()
 {
-    for (int i = 0; i < OGL.maxTextureUnits; i++)
-    {
-        glActiveTextureARB(GL_TEXTURE0_ARB + i);
-        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-    }
+    // Nothing to clean up — shader uniforms are managed by the GL driver.
 }
 
-static void UpdateColors(UnifiedCompiledCombiner *envCombiner)
+static void UpdateColors(UnifiedCompiledCombiner * /*envCombiner*/)
 {
-    GLcolor color;
-
-    for (int i = 0; i < OGL.maxTextureUnits; i++)
-    {
-        SetConstant(color, envCombiner->color[i].constant, envCombiner->alpha[i].constant);
-        glActiveTextureARB(GL_TEXTURE0_ARB + i);
-        glTexEnvfv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_COLOR, &color.r);
-    }
+    // Fixed-function glTexEnvfv(GL_TEXTURE_ENV_COLOR) has been replaced by
+    // shader uniforms.  Ask the renderer to re-upload the current combiner
+    // state (which includes the latest prim/env colours from gDP).
+    OGL_UpdateN64CombinerColors();
 }
 
 static void Compile(UnifiedCompiledCombiner *envCombiner, Combiner *color, Combiner *alpha)
@@ -185,13 +190,13 @@ static void Compile(UnifiedCompiledCombiner *envCombiner, Combiner *color, Combi
         SetColorCombinerValues(i, arg1, GL_PREVIOUS_ARB, GL_SRC_COLOR);
         SetColorCombinerValues(i, arg2, GL_PREVIOUS_ARB, GL_SRC_COLOR);
         envCombiner->color[i].constant = COMBINED;
-        envCombiner->color[i].outputTexture = GL_TEXTURE0_ARB + i;
+        envCombiner->color[i].outputTexture = GL_TEXTURE0 + i;
 
         SetAlphaCombinerValues(i, arg0, GL_PREVIOUS_ARB, GL_SRC_ALPHA);
         SetAlphaCombinerValues(i, arg1, GL_PREVIOUS_ARB, GL_SRC_ALPHA);
         SetAlphaCombinerValues(i, arg2, GL_PREVIOUS_ARB, GL_SRC_ALPHA);
         envCombiner->alpha[i].constant = COMBINED;
-        envCombiner->alpha[i].outputTexture = GL_TEXTURE0_ARB + i;
+        envCombiner->alpha[i].outputTexture = GL_TEXTURE0 + i;
     }
 
     envCombiner->usesT0 = FALSE;
@@ -409,10 +414,42 @@ static void Compile(UnifiedCompiledCombiner *envCombiner, Combiner *color, Combi
     }
 
     envCombiner->usedUnits = max(curUnit, (int)envCombiner->usedUnits);
+
+    // -------------------------------------------------------------------
+    // NEW: Decode the original canonical (A-B)*C+D form directly from
+    // gDP.combine.mux.  The shader needs these values to replicate the
+    // N64 combiner exactly.  The stage simplification above is kept only
+    // to produce usesT0 / usesT1 / vertex colour source flags.
+    // -------------------------------------------------------------------
+    gDPCombine combine = gDP.combine;
+
+    envCombiner->saRGB0 = saRGBExpanded[combine.saRGB0];
+    envCombiner->sbRGB0 = sbRGBExpanded[combine.sbRGB0];
+    envCombiner->mRGB0 = mRGBExpanded[combine.mRGB0];
+    envCombiner->aRGB0 = aRGBExpanded[combine.aRGB0];
+
+    envCombiner->saA0 = saAExpanded[combine.saA0];
+    envCombiner->sbA0 = sbAExpanded[combine.sbA0];
+    envCombiner->mA0 = mAExpanded[combine.mA0];
+    envCombiner->aA0 = aAExpanded[combine.aA0];
+
+    envCombiner->saRGB1 = saRGBExpanded[combine.saRGB1];
+    envCombiner->sbRGB1 = sbRGBExpanded[combine.sbRGB1];
+    envCombiner->mRGB1 = mRGBExpanded[combine.mRGB1];
+    envCombiner->aRGB1 = aRGBExpanded[combine.aRGB1];
+
+    envCombiner->saA1 = saAExpanded[combine.saA1];
+    envCombiner->sbA1 = sbAExpanded[combine.sbA1];
+    envCombiner->mA1 = mAExpanded[combine.mA1];
+    envCombiner->aA1 = aAExpanded[combine.aA1];
+
+    envCombiner->numCycles = (gDP.otherMode.cycleType == G_CYC_2CYCLE) ? 2 : 1;
 }
 
 static void Set(UnifiedCompiledCombiner *envCombiner)
 {
+    // Update the global CombinerInfo flags that the vertex-building code
+    // in OpenGL.cpp reads (e.g.  combiner.usesT0, combiner.vertex.color).
     combiner.usesT0 = envCombiner->usesT0;
     combiner.usesT1 = envCombiner->usesT1;
     combiner.usesNoise = FALSE;
@@ -421,37 +458,97 @@ static void Set(UnifiedCompiledCombiner *envCombiner)
     combiner.vertex.secondaryColor = envCombiner->vertex.secondaryColor;
     combiner.vertex.alpha = envCombiner->vertex.alpha;
 
-    for (int i = 0; i < OGL.maxTextureUnits; i++)
+    // -----------------------------------------------------------------
+    // Build the N64 combiner state and upload it to the shader as
+    // uniforms.  This replaces the entire fixed-function glTexEnv block.
+    // -----------------------------------------------------------------
+    N64CombinerState state = {};
+
+    // Constant colours from gDP
+    state.primColor[0] = gDP.primColor.r;
+    state.primColor[1] = gDP.primColor.g;
+    state.primColor[2] = gDP.primColor.b;
+    state.primColor[3] = gDP.primColor.a;
+
+    state.envColor[0] = gDP.envColor.r;
+    state.envColor[1] = gDP.envColor.g;
+    state.envColor[2] = gDP.envColor.b;
+    state.envColor[3] = gDP.envColor.a;
+
+    state.primLODFrac = gDP.primColor.l;
+
+    state.fogColor[0] = gDP.fogColor.r;
+    state.fogColor[1] = gDP.fogColor.g;
+    state.fogColor[2] = gDP.fogColor.b;
+    state.fogColor[3] = gDP.fogColor.a;
+
+    state.fogEnabled = ((gSP.geometryMode & G_FOG) && OGL.fog) ? 1 : 0;
+    state.fogMultiplier = (float)gSP.fog.multiplier;
+    state.fogOffset = (float)gSP.fog.offset;
+
+    // Alpha test
+    if ((gDP.otherMode.alphaCompare == G_AC_THRESHOLD) && !(gDP.otherMode.alphaCvgSel))
     {
-        glActiveTextureARB(GL_TEXTURE0_ARB + i);
-
-        if ((i < envCombiner->usedUnits) || ((i < 2) && envCombiner->usesT1))
-        {
-            glEnable(GL_TEXTURE_2D);
-            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_ARB);
-
-            glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB_ARB, envCombiner->color[i].combine);
-            glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE0_RGB_ARB, envCombiner->color[i].arg0.source);
-            glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_RGB_ARB, envCombiner->color[i].arg0.operand);
-            glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_RGB_ARB, envCombiner->color[i].arg1.source);
-            glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB_ARB, envCombiner->color[i].arg1.operand);
-            glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE2_RGB_ARB, envCombiner->color[i].arg2.source);
-            glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND2_RGB_ARB, envCombiner->color[i].arg2.operand);
-
-            glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA_ARB, envCombiner->alpha[i].combine);
-            glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE0_ALPHA_ARB, envCombiner->alpha[i].arg0.source);
-            glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_ALPHA_ARB, envCombiner->alpha[i].arg0.operand);
-            glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_ALPHA_ARB, envCombiner->alpha[i].arg1.source);
-            glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_ALPHA_ARB, envCombiner->alpha[i].arg1.operand);
-            glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE2_ALPHA_ARB, envCombiner->alpha[i].arg2.source);
-            glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND2_ALPHA_ARB, envCombiner->alpha[i].arg2.operand);
-        }
-        else
-        {
-            glDisable(GL_TEXTURE_2D);
-        }
+        state.alphaTestEnabled = 1;
+        state.alphaTestThreshold = gDP.blendColor.a;
+        state.alphaTestFunction = (gDP.blendColor.a > 0.0f) ? 1 : 0; // 1 = GEQUAL, 0 = GREATER
     }
+    else if (gDP.otherMode.cvgXAlpha)
+    {
+        state.alphaTestEnabled = 1;
+        state.alphaTestThreshold = 0.5f;
+        state.alphaTestFunction = 1; // GEQUAL
+    }
+    else
+    {
+        state.alphaTestEnabled = 0;
+        state.alphaTestThreshold = 0.0f;
+        state.alphaTestFunction = 0;
+    }
+
+    // Stipple (dithered alpha)
+    if (OGL.usePolygonStipple && (gDP.otherMode.alphaCompare == G_AC_DITHER) && !(gDP.otherMode.alphaCvgSel))
+    {
+        state.stippleEnabled = 1;
+        state.stippleAlpha = (int)(gDP.envColor.a * 255.0f);
+        state.stipplePattern = OGL.lastStipple;
+    }
+    else
+    {
+        state.stippleEnabled = 0;
+        state.stippleAlpha = 0;
+        state.stipplePattern = 0;
+    }
+
+    // Canonical combiner inputs (decoded in Compile() from gDP.combine.mux)
+    state.saRGB0 = envCombiner->saRGB0;
+    state.sbRGB0 = envCombiner->sbRGB0;
+    state.mRGB0 = envCombiner->mRGB0;
+    state.aRGB0 = envCombiner->aRGB0;
+
+    state.saA0 = envCombiner->saA0;
+    state.sbA0 = envCombiner->sbA0;
+    state.mA0 = envCombiner->mA0;
+    state.aA0 = envCombiner->aA0;
+
+    state.saRGB1 = envCombiner->saRGB1;
+    state.sbRGB1 = envCombiner->sbRGB1;
+    state.mRGB1 = envCombiner->mRGB1;
+    state.aRGB1 = envCombiner->aRGB1;
+
+    state.saA1 = envCombiner->saA1;
+    state.sbA1 = envCombiner->sbA1;
+    state.mA1 = envCombiner->mA1;
+    state.aA1 = envCombiner->aA1;
+
+    state.numCycles = envCombiner->numCycles;
+
+    OGL_SetN64Combiner(&state);
 }
+
+// =========================================================================
+// Public interface
+// =========================================================================
 
 void Init_unified_combiner()
 {
@@ -482,11 +579,9 @@ void Set_unified_combiner(UnifiedCompiledCombiner *compiled)
 
 void BeginTextureUpdate_unified_combiner()
 {
-    for (int i = 0; i < OGL.maxTextureUnits; i++)
-    {
-        glActiveTextureARB(GL_TEXTURE0_ARB + i);
-        glDisable(GL_TEXTURE_2D);
-    }
+    // With shader-based rendering there is no fixed-function texture-unit
+    // state to disable.  Texture binding is handled by the caller via
+    // glActiveTexture/glBindTexture before drawing.
 }
 
 void EndTextureUpdate_unified_combiner()

@@ -102,3 +102,33 @@ void OGL_DestroyN64Resources();
 void OGL_InitBlitResources();
 void OGL_DestroyBlitResources();
 void OGL_BlitTexture(GLuint texture, float x, float y, float w, float h, float u1, float v1);
+
+// N64 combiner uniform state (replaces fixed-function glTexEnv)
+struct N64CombinerState
+{
+    float primColor[4];
+    float envColor[4];
+    float primLODFrac;
+    float fogColor[4];
+    int fogEnabled;
+    float fogMultiplier;
+    float fogOffset;
+    int alphaTestEnabled;
+    float alphaTestThreshold;
+    int alphaTestFunction;
+    int stippleEnabled;
+    int stippleAlpha;
+    int stipplePattern;
+    // Cycle 0 RGB: (A - B) * C + D
+    int saRGB0, sbRGB0, mRGB0, aRGB0;
+    // Cycle 0 Alpha: (A - B) * C + D
+    int saA0, sbA0, mA0, aA0;
+    // Cycle 1 RGB: (A - B) * C + D
+    int saRGB1, sbRGB1, mRGB1, aRGB1;
+    // Cycle 1 Alpha: (A - B) * C + D
+    int saA1, sbA1, mA1, aA1;
+    int numCycles;
+};
+
+void OGL_SetN64Combiner(const N64CombinerState *state);
+void OGL_UpdateN64CombinerColors(void);

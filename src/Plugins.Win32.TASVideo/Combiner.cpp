@@ -258,8 +258,9 @@ void Combiner_Destroy()
 
     for (int i = 0; i < OGL.maxTextureUnits; i++)
     {
-        glActiveTextureARB(GL_TEXTURE0_ARB + i);
-        glDisable(GL_TEXTURE_2D);
+        glActiveTexture(GL_TEXTURE0 + i);
+        // glDisable(GL_TEXTURE_2D) is deprecated in Core OpenGL / unavailable
+        // in GLES.  Texture binding is managed via uUseTextureN uniforms.
     }
 }
 
