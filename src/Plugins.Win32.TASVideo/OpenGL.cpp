@@ -1068,23 +1068,23 @@ void OGL_InitN64Resources()
     g_n64UniUseTexture1 = glGetUniformLocation(g_n64Program, "uUseTexture1");
 
     // N64 uber-combiner uniform locations
-    g_n64UniPrimColor      = glGetUniformLocation(g_n64Program, "uPrimColor");
-    g_n64UniEnvColor       = glGetUniformLocation(g_n64Program, "uEnvColor");
-    g_n64UniPrimLODFrac    = glGetUniformLocation(g_n64Program, "uPrimLODFrac");
-    g_n64UniFogColor       = glGetUniformLocation(g_n64Program, "uFogColor");
-    g_n64UniFogEnabled     = glGetUniformLocation(g_n64Program, "uFogEnabled");
-    g_n64UniFogMultiplier  = glGetUniformLocation(g_n64Program, "uFogMultiplier");
-    g_n64UniFogOffset      = glGetUniformLocation(g_n64Program, "uFogOffset");
-    g_n64UniAlphaTestEnabled   = glGetUniformLocation(g_n64Program, "uAlphaTestEnabled");
+    g_n64UniPrimColor = glGetUniformLocation(g_n64Program, "uPrimColor");
+    g_n64UniEnvColor = glGetUniformLocation(g_n64Program, "uEnvColor");
+    g_n64UniPrimLODFrac = glGetUniformLocation(g_n64Program, "uPrimLODFrac");
+    g_n64UniFogColor = glGetUniformLocation(g_n64Program, "uFogColor");
+    g_n64UniFogEnabled = glGetUniformLocation(g_n64Program, "uFogEnabled");
+    g_n64UniFogMultiplier = glGetUniformLocation(g_n64Program, "uFogMultiplier");
+    g_n64UniFogOffset = glGetUniformLocation(g_n64Program, "uFogOffset");
+    g_n64UniAlphaTestEnabled = glGetUniformLocation(g_n64Program, "uAlphaTestEnabled");
     g_n64UniAlphaTestThreshold = glGetUniformLocation(g_n64Program, "uAlphaTestThreshold");
-    g_n64UniAlphaTestFunction  = glGetUniformLocation(g_n64Program, "uAlphaTestFunction");
+    g_n64UniAlphaTestFunction = glGetUniformLocation(g_n64Program, "uAlphaTestFunction");
     g_n64UniStippleEnabled = glGetUniformLocation(g_n64Program, "uPolygonStippleEnabled");
     g_n64UniStipplePattern = glGetUniformLocation(g_n64Program, "uStipplePattern");
-    g_n64UniCombine0RGB    = glGetUniformLocation(g_n64Program, "uCombine0RGB");
-    g_n64UniCombine0A      = glGetUniformLocation(g_n64Program, "uCombine0A");
-    g_n64UniCombine1RGB    = glGetUniformLocation(g_n64Program, "uCombine1RGB");
-    g_n64UniCombine1A      = glGetUniformLocation(g_n64Program, "uCombine1A");
-    g_n64UniNumCycles      = glGetUniformLocation(g_n64Program, "uNumCycles");
+    g_n64UniCombine0RGB = glGetUniformLocation(g_n64Program, "uCombine0RGB");
+    g_n64UniCombine0A = glGetUniformLocation(g_n64Program, "uCombine0A");
+    g_n64UniCombine1RGB = glGetUniformLocation(g_n64Program, "uCombine1RGB");
+    g_n64UniCombine1A = glGetUniformLocation(g_n64Program, "uCombine1A");
+    g_n64UniNumCycles = glGetUniformLocation(g_n64Program, "uNumCycles");
 
     glGenVertexArrays(1, &g_n64VAO);
     glGenBuffers(1, &g_n64VBO);
@@ -1766,16 +1766,11 @@ void OGL_SetN64Combiner(const N64CombinerState *state)
     if (g_n64UniStipplePattern >= 0) glUniform1i(g_n64UniStipplePattern, state->stipplePattern);
 
     // Combiner: pack canonical (A, B, C, D) into ivec4 uniforms per cycle per channel
-    if (g_n64UniCombine0RGB >= 0)
-        glUniform4i(g_n64UniCombine0RGB, state->saRGB0, state->sbRGB0, state->mRGB0, state->aRGB0);
-    if (g_n64UniCombine0A >= 0)
-        glUniform4i(g_n64UniCombine0A, state->saA0, state->sbA0, state->mA0, state->aA0);
-    if (g_n64UniCombine1RGB >= 0)
-        glUniform4i(g_n64UniCombine1RGB, state->saRGB1, state->sbRGB1, state->mRGB1, state->aRGB1);
-    if (g_n64UniCombine1A >= 0)
-        glUniform4i(g_n64UniCombine1A, state->saA1, state->sbA1, state->mA1, state->aA1);
-    if (g_n64UniNumCycles >= 0)
-        glUniform1i(g_n64UniNumCycles, state->numCycles);
+    if (g_n64UniCombine0RGB >= 0) glUniform4i(g_n64UniCombine0RGB, state->saRGB0, state->sbRGB0, state->mRGB0, state->aRGB0);
+    if (g_n64UniCombine0A >= 0) glUniform4i(g_n64UniCombine0A, state->saA0, state->sbA0, state->mA0, state->aA0);
+    if (g_n64UniCombine1RGB >= 0) glUniform4i(g_n64UniCombine1RGB, state->saRGB1, state->sbRGB1, state->mRGB1, state->aRGB1);
+    if (g_n64UniCombine1A >= 0) glUniform4i(g_n64UniCombine1A, state->saA1, state->sbA1, state->mA1, state->aA1);
+    if (g_n64UniNumCycles >= 0) glUniform1i(g_n64UniNumCycles, state->numCycles);
 }
 
 void OGL_UpdateN64CombinerColors(void)
