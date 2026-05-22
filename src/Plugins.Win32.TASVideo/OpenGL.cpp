@@ -1766,9 +1766,11 @@ void OGL_SetN64Combiner(const N64CombinerState *state)
     if (g_n64UniStipplePattern >= 0) glUniform1i(g_n64UniStipplePattern, state->stipplePattern);
 
     // Combiner: pack canonical (A, B, C, D) into ivec4 uniforms per cycle per channel
-    if (g_n64UniCombine0RGB >= 0) glUniform4i(g_n64UniCombine0RGB, state->saRGB0, state->sbRGB0, state->mRGB0, state->aRGB0);
+    if (g_n64UniCombine0RGB >= 0)
+        glUniform4i(g_n64UniCombine0RGB, state->saRGB0, state->sbRGB0, state->mRGB0, state->aRGB0);
     if (g_n64UniCombine0A >= 0) glUniform4i(g_n64UniCombine0A, state->saA0, state->sbA0, state->mA0, state->aA0);
-    if (g_n64UniCombine1RGB >= 0) glUniform4i(g_n64UniCombine1RGB, state->saRGB1, state->sbRGB1, state->mRGB1, state->aRGB1);
+    if (g_n64UniCombine1RGB >= 0)
+        glUniform4i(g_n64UniCombine1RGB, state->saRGB1, state->sbRGB1, state->mRGB1, state->aRGB1);
     if (g_n64UniCombine1A >= 0) glUniform4i(g_n64UniCombine1A, state->saA1, state->sbA1, state->mA1, state->aA1);
     if (g_n64UniNumCycles >= 0) glUniform1i(g_n64UniNumCycles, state->numCycles);
 }
