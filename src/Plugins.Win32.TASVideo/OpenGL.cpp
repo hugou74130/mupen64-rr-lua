@@ -683,6 +683,17 @@ void OGL_DrawTriangles()
 // Forward declare CompileShader (defined later with blit resources)
 static GLuint CompileShader(GLenum type, const char *source);
 
+// ============================================================================
+// GLSL version selection
+// ============================================================================
+// Define USE_OPENGL_ES when targeting GLES 3.0 or ANGLE.
+// On desktop Core OpenGL this macro is absent and we default to #version 330.
+#ifdef USE_OPENGL_ES
+#define GLSL_VERSION_HEADER "#version 300 es\n"
+#else
+#define GLSL_VERSION_HEADER "#version 330 core\n"
+#endif
+
 // ---- Core OpenGL Primitive Resources (lines, rects, textured rects) ----
 static GLuint g_primVAO = 0;
 static GLuint g_primVBO = 0;
@@ -847,11 +858,6 @@ void OGL_DestroyPrimitiveResources()
 // Uber-combiner shader: replaces all glTexEnv/GL_COMBINE_ARB, glAlphaFunc,
 // glFog* and glPolygonStipple fixed-function pipeline.
 // Targets OpenGL 3.3 Core / GLES 3.0 / ANGLE.
-#ifdef USE_OPENGL_ES
-#define GLSL_VERSION_HEADER "#version 300 es\n"
-#else
-#define GLSL_VERSION_HEADER "#version 330 core\n"
-#endif
 
 static const char *g_n64VS = GLSL_VERSION_HEADER R"(
 #ifdef GL_ES
