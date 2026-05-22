@@ -47,6 +47,12 @@ static N64CombinerState g_n64State;
 
 void *gCapturedPixels; // pointer to buffer to fill
 
+// Forward declarations for Core OpenGL context abstraction
+void OGL_SwapBuffers();
+
+// Forward declarations for Core OpenGL context abstraction
+void OGL_SwapBuffers();
+
 void OGL_ReadPixels()
 {
     GLint oldMode;
