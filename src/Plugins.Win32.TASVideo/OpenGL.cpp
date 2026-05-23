@@ -719,8 +719,11 @@ void OGL_DrawTriangles()
         glUniform1i(g_n64UniTexture0, 0);
         glUniform1i(g_n64UniTexture1, 1);
 
-        // Upload full combiner state (colors, fog, alpha test, stipple, combiner config)
-        OGL_SetN64Combiner(&state);
+        // Only upload stipple state here. The full combiner state (colors,
+        // combine uniforms, fog, alpha test) was already uploaded by
+        // Set() / EndTextureUpdate_unified_combiner() in OGL_UpdateStates().
+        if (g_n64UniStippleEnabled >= 0) glUniform1i(g_n64UniStippleEnabled, state.stippleEnabled);
+        if (g_n64UniStipplePattern >= 0) glUniform1i(g_n64UniStipplePattern, state.stipplePattern);
 
         glBindVertexArray(g_n64VAO);
         glBindBuffer(GL_ARRAY_BUFFER, g_n64VBO);
