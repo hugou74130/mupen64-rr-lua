@@ -717,15 +717,16 @@ void OGL_DrawTriangles()
 
         // Re-bind textures before every draw call — other helpers (blit, textured rect)
         // may have switched GL_TEXTURE0/1 between OGL_UpdateStates() and now.
-        if (combiner.usesT0 && cache.current[0])
-        {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, cache.current[0]->glName);
-        }
-        if (combiner.usesT1 && cache.current[1])
+        // Always bind *something* (real texture or dummy) so the sampler is never
+        // left without a bound texture, which produces undefined (usually white).
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D,
+                      (combiner.usesT0 && cache.current[0]) ? cache.current[0]->glName : cache.dummy->glName);
+        if (OGL.ARB_multitexture)
         {
             glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, cache.current[1]->glName);
+            glBindTexture(GL_TEXTURE_2D,
+                          (combiner.usesT1 && cache.current[1]) ? cache.current[1]->glName : cache.dummy->glName);
         }
 
         glUniform1i(g_n64UniUseTexture0, combiner.usesT0 ? GL_TRUE : GL_FALSE);
