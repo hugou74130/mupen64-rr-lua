@@ -1062,11 +1062,9 @@ vec4 combinerCycle(ivec4 rgbABCD, ivec4 alphaABCD,
 }
 
 void main() {
-    // DEBUG: passthrough texture coordinates as color to verify T0 is bound
-    // and coordinates are non-zero.  Remove this block once trees render
-    // correctly — it is a temporary diagnostic only.
+    // DEBUG: passthrough raw texture sample for T0 draws.
     if (uUseTexture0) {
-        FragColor = vec4(fract(vTexCoord0.x), fract(vTexCoord0.y), 0.0, 1.0);
+        FragColor = texture(uTexture0, vTexCoord0);
         return;
     }
 
