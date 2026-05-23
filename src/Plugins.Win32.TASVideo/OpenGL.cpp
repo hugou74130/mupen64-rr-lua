@@ -1062,12 +1062,6 @@ vec4 combinerCycle(ivec4 rgbABCD, ivec4 alphaABCD,
 }
 
 void main() {
-    // DEBUG: passthrough raw texture sample for T0 draws.
-    if (uUseTexture0) {
-        FragColor = texture(uTexture0, vTexCoord0);
-        return;
-    }
-
     vec4 texel0 = vec4(1.0);
     vec4 texel1 = vec4(1.0);
     if (uUseTexture0) texel0 = texture(uTexture0, vTexCoord0);
