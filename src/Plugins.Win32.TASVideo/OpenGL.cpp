@@ -714,6 +714,20 @@ void OGL_DrawTriangles()
     if (g_n64Program)
     {
         glUseProgram(g_n64Program);
+
+        // Re-bind textures before every draw call — other helpers (blit, textured rect)
+        // may have switched GL_TEXTURE0/1 between OGL_UpdateStates() and now.
+        if (combiner.usesT0 && cache.current[0])
+        {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, cache.current[0]->glName);
+        }
+        if (combiner.usesT1 && cache.current[1])
+        {
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, cache.current[1]->glName);
+        }
+
         glUniform1i(g_n64UniUseTexture0, combiner.usesT0 ? GL_TRUE : GL_FALSE);
         glUniform1i(g_n64UniUseTexture1, combiner.usesT1 ? GL_TRUE : GL_FALSE);
         glUniform1i(g_n64UniTexture0, 0);
@@ -1048,6 +1062,14 @@ vec4 combinerCycle(ivec4 rgbABCD, ivec4 alphaABCD,
 }
 
 void main() {
+    // DEBUG: passthrough texture coordinates as color to verify T0 is bound
+    // and coordinates are non-zero.  Remove this block once trees render
+    // correctly — it is a temporary diagnostic only.
+    if (uUseTexture0) {
+        FragColor = vec4(fract(vTexCoord0.x), fract(vTexCoord0.y), 0.0, 1.0);
+        return;
+    }
+
     vec4 texel0 = vec4(1.0);
     vec4 texel1 = vec4(1.0);
     if (uUseTexture0) texel0 = texture(uTexture0, vTexCoord0);
