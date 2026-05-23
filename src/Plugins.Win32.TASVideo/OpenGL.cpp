@@ -1063,41 +1063,16 @@ vec4 combinerCycle(ivec4 rgbABCD, ivec4 alphaABCD,
 }
 
 void main() {
-    vec4 texel0 = vec4(1.0);
-    vec4 texel1 = vec4(1.0);
-    if (uUseTexture0) texel0 = texture(uTexture0, vTexCoord0);
-    if (uUseTexture1) texel1 = texture(uTexture1, vTexCoord1);
-
-    vec4 shade = vColor;
-    vec4 combined = shade;
-
-    combined = combinerCycle(uCombine0RGB, uCombine0A, texel0, texel1, combined, shade);
-    if (uNumCycles >= 2) {
-        combined = combinerCycle(uCombine1RGB, uCombine1A, texel0, texel1, combined, shade);
+    // FALLBACK: hardcoded MODULATE — tests whether the issue is in the
+    // uber-combiner logic or in the texture/sampler/coords pipeline.
+    // If everything renders correctly with this, the combiner shader
+    // has a bug. If things are still broken, the problem is texcoords
+    // or texture binding.
+    if (uUseTexture0) {
+        FragColor = vColor * texture(uTexture0, vTexCoord0);
+    } else {
+        FragColor = vColor;
     }
-
-    if (uFogEnabled) {
-        float fogFactor = clamp(vFog, 0.0, 1.0);
-        combined.rgb = mix(combined.rgb, uFogColor.rgb, fogFactor);
-    }
-
-    if (uAlphaTestEnabled) {
-        bool pass = true;
-        if (uAlphaTestFunction == 1)
-            pass = combined.a >= uAlphaTestThreshold;
-        else if (uAlphaTestFunction == 2)
-            pass = combined.a > uAlphaTestThreshold;
-        if (!pass) discard;
-    }
-
-    if (uPolygonStippleEnabled) {
-        int sx = int(mod(gl_FragCoord.x, 8.0));
-        int sy = int(mod(gl_FragCoord.y, 4.0));
-        int bit = (uStipplePattern >> (sy * 8 + sx)) & 1;
-        if (bit == 0) discard;
-    }
-
-    FragColor = combined;
 }
 )";
 
