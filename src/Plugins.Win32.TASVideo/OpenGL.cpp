@@ -735,11 +735,10 @@ void OGL_DrawTriangles()
         glUniform1i(g_n64UniTexture0, 0);
         glUniform1i(g_n64UniTexture1, 1);
 
-        // Only upload stipple state here. The full combiner state (colors,
-        // combine uniforms, fog, alpha test) was already uploaded by
-        // Set() / EndTextureUpdate_unified_combiner() in OGL_UpdateStates().
-        if (g_n64UniStippleEnabled >= 0) glUniform1i(g_n64UniStippleEnabled, state.stippleEnabled);
-        if (g_n64UniStipplePattern >= 0) glUniform1i(g_n64UniStipplePattern, state.stipplePattern);
+        // Re-upload the full combiner state so that stipple (which changes
+        // per-draw) is correct and we are safe if OGL_UpdateStates() was
+        // skipped for any reason.
+        OGL_SetN64Combiner(&state);
 
         glBindVertexArray(g_n64VAO);
         glBindBuffer(GL_ARRAY_BUFFER, g_n64VBO);
@@ -972,7 +971,6 @@ precision mediump sampler2D;
 #define UC_SHADE          4
 #define UC_ENVIRONMENT    5
 #define UC_CENTER         6
-#define UC_ONE            7
 #define UC_COMBINED_ALPHA 8
 #define UC_TEXEL0_ALPHA   9
 #define UC_TEXEL1_ALPHA   10
@@ -981,10 +979,11 @@ precision mediump sampler2D;
 #define UC_ENV_ALPHA      13
 #define UC_LOD_FRACTION   14
 #define UC_PRIM_LOD_FRAC  15
-#define UC_K4             16
-#define UC_K5             17
-#define UC_ZERO           18
-#define UC_HALF           19
+#define UC_NOISE          16
+#define UC_K4             17
+#define UC_K5             18
+#define UC_ONE            19
+#define UC_ZERO           20
 
 uniform sampler2D uTexture0;
 uniform sampler2D uTexture1;
@@ -1039,9 +1038,10 @@ vec4 resolveInput(int src, vec4 texel0, vec4 texel1, vec4 combined, vec4 shade) 
         case UC_ENV_ALPHA:       return vec4(uEnvColor.a);
         case UC_LOD_FRACTION:    return vec4(uPrimLODFrac);
         case UC_PRIM_LOD_FRAC:   return vec4(uPrimLODFrac);
+        case UC_NOISE:           return vec4(fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453));
         case UC_K4:              return vec4(1.0, 1.0, 1.0, 1.0);
         case UC_K5:              return vec4(0.5, 0.5, 0.5, 0.5);
-        case UC_HALF:            return vec4(0.5, 0.5, 0.5, 0.5);
+        case UC_ONE:             return vec4(1.0, 1.0, 1.0, 1.0);
         case UC_ZERO:            return vec4(0.0, 0.0, 0.0, 0.0);
         default:                 return vec4(0.0, 0.0, 0.0, 0.0);
     }
@@ -1812,6 +1812,7 @@ void OGL_BlitTexture(GLuint texture, float x, float y, float w, float h, float u
 
 void OGL_SetN64Combiner(const N64CombinerState *state)
 {
+    g_n64State = *state;
     OGL_InitN64Resources();
     if (!g_n64Program) return;
 
