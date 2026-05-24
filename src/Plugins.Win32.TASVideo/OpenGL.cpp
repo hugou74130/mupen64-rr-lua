@@ -1029,7 +1029,6 @@ vec4 resolveInput(int src, vec4 texel0, vec4 texel1, vec4 combined, vec4 shade) 
         case UC_SHADE:           return shade;
         case UC_ENVIRONMENT:     return uEnvColor;
         case UC_CENTER:          return vec4(0.5, 0.5, 0.5, 0.5);
-        case UC_ONE:             return vec4(1.0, 1.0, 1.0, 1.0);
         case UC_COMBINED_ALPHA:  return vec4(combined.a);
         case UC_TEXEL0_ALPHA:    return vec4(texel0.a);
         case UC_TEXEL1_ALPHA:    return vec4(texel1.a);
