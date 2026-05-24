@@ -1064,41 +1064,16 @@ vec4 combinerCycle(ivec4 rgbABCD, ivec4 alphaABCD,
 }
 
 void main() {
-    vec4 texel0 = vec4(1.0);
-    vec4 texel1 = vec4(1.0);
-    if (uUseTexture0) texel0 = texture(uTexture0, vTexCoord0);
-    if (uUseTexture1) texel1 = texture(uTexture1, vTexCoord1);
-
-    vec4 shade = vColor;
-    vec4 combined = shade;
-
-    combined = combinerCycle(uCombine0RGB, uCombine0A, texel0, texel1, combined, shade);
-    if (uNumCycles >= 2) {
-        combined = combinerCycle(uCombine1RGB, uCombine1A, texel0, texel1, combined, shade);
+    // DIAGNOSTIC: direct texture passthrough to isolate the white-render bug.
+    //  - If trees show their real texture (green/brown) → texture pipeline is OK,
+    //    the bug is in combinerCycle / resolveInput.
+    //  - If trees are RED → uUseTexture0 is false (combiner.usesT0 is wrong).
+    //  - If trees are WHITE → texture() returns white (binding/sampler/texcoords bug).
+    if (uUseTexture0) {
+        FragColor = texture(uTexture0, vTexCoord0);
+    } else {
+        FragColor = vec4(1.0, 0.0, 0.0, 1.0); // RED = no texture flag
     }
-
-    if (uFogEnabled) {
-        float fogFactor = clamp(vFog, 0.0, 1.0);
-        combined.rgb = mix(combined.rgb, uFogColor.rgb, fogFactor);
-    }
-
-    if (uAlphaTestEnabled) {
-        bool pass = true;
-        if (uAlphaTestFunction == 1)
-            pass = combined.a >= uAlphaTestThreshold;
-        else if (uAlphaTestFunction == 2)
-            pass = combined.a > uAlphaTestThreshold;
-        if (!pass) discard;
-    }
-
-    if (uPolygonStippleEnabled) {
-        int sx = int(mod(gl_FragCoord.x, 8.0));
-        int sy = int(mod(gl_FragCoord.y, 4.0));
-        int bit = (uStipplePattern >> (sy * 8 + sx)) & 1;
-        if (bit == 0) discard;
-    }
-
-    FragColor = combined;
 }
 )";
 
