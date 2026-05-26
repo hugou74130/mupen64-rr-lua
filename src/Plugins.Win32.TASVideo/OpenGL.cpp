@@ -73,7 +73,7 @@ void OGL_InitExtensions()
     }
 
     OGL.ARB_multitexture = GLEW_ARB_multitexture;
-    glGetIntegerv(GL_MAX_TEXTURE_UNITS_ARB, &OGL.maxTextureUnits);
+    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &OGL.maxTextureUnits);
     OGL.maxTextureUnits = min(8, OGL.maxTextureUnits); // The plugin only supports 8, and 4 is really enough
 
     OGL.EXT_fog_coord = GLEW_EXT_fog_coord;
@@ -237,14 +237,53 @@ bool OGL_CreateContext()
         OGL_Stop();
         return FALSE;
     }
-    if ((OGL.hRC = wglCreateContext(OGL.hDC)) == NULL)
+    // Create a temporary legacy context so we can query wglCreateContextAttribsARB.
+    HGLRC tempRC = wglCreateContext(OGL.hDC);
+    if (!tempRC)
     {
-        MessageBox(hWnd, L"Error while creating OpenGL context!", PLUGIN_NAME, MB_ICONERROR | MB_OK);
+        MessageBox(hWnd, L"Error while creating temporary OpenGL context!", PLUGIN_NAME, MB_ICONERROR | MB_OK);
         OGL_Stop();
         return FALSE;
     }
 
-    if ((wglMakeCurrent(OGL.hDC, OGL.hRC)) == FALSE)
+    if (!wglMakeCurrent(OGL.hDC, tempRC))
+    {
+        MessageBox(hWnd, L"Error while making temporary OpenGL context current!", PLUGIN_NAME, MB_ICONERROR | MB_OK);
+        wglDeleteContext(tempRC);
+        OGL_Stop();
+        return FALSE;
+    }
+
+    // Load the extension needed for Core Profile creation.
+    PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB =
+        (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress("wglCreateContextAttribsARB");
+
+    if (wglCreateContextAttribsARB)
+    {
+        int attribs[] = {
+            WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+            WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+            WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+            0
+        };
+        OGL.hRC = wglCreateContextAttribsARB(OGL.hDC, 0, attribs);
+    }
+
+    if (!OGL.hRC)
+    {
+        // Fallback to the legacy context if Core Profile creation failed.
+        OGL.hRC = tempRC;
+        tempRC = NULL;
+    }
+    else
+    {
+        // Core context created successfully; discard the temp one.
+        wglMakeCurrent(NULL, NULL);
+        wglDeleteContext(tempRC);
+        tempRC = NULL;
+    }
+
+    if (!wglMakeCurrent(OGL.hDC, OGL.hRC))
     {
         MessageBox(hWnd, L"Error while making OpenGL context current!", PLUGIN_NAME, MB_ICONERROR | MB_OK);
         OGL_Stop();
@@ -576,6 +615,8 @@ void OGL_AddTriangle(SPVertex *vertices, int v0, int v1, int v2)
     // ) * gSP.viewport.vscale[0]; 	float lod = ds / dx; 	float lod_fraction = min( 1.0f, max( 0.0f, lod - 1.0f ) /
     // max( 1.0f, gSP.texture.level ) );
 
+    if (OGL.numVertices > 252) OGL_DrawTriangles();
+
     for (int i = 0; i < 3; i++)
     {
         // Zero-initialize the whole vertex so that fields the shader always
@@ -664,7 +705,7 @@ void OGL_AddTriangle(SPVertex *vertices, int v0, int v1, int v2)
 
         if (combiner.usesT1)
         {
-            if (cache.current[0]->frameBufferTexture)
+            if (cache.current[1]->frameBufferTexture)
             {
                 OGL.vertices[OGL.numVertices].s1 =
                     (cache.current[1]->offsetS +
@@ -692,8 +733,6 @@ void OGL_AddTriangle(SPVertex *vertices, int v0, int v1, int v2)
         OGL.numVertices++;
     }
     OGL.numTriangles++;
-
-    if (OGL.numVertices > 252) OGL_DrawTriangles();
 }
 
 void OGL_DrawTriangles()
@@ -985,6 +1024,7 @@ static const char *g_n64FS = GLSL_VERSION_HEADER R"(
 #ifdef GL_ES
 precision mediump float;
 precision mediump sampler2D;
+precision highp uint;
 #endif
 
 #define UC_COMBINED       0
@@ -1247,7 +1287,8 @@ void OGL_DrawLine(SPVertex *vertices, int v0, int v1, float width)
 
     if (gSP.changed || gDP.changed) OGL_UpdateStates();
 
-    glLineWidth(width * OGL.scaleX);
+    // Core OpenGL 3.3+ only guarantees line width of 1.0.
+    glLineWidth(1.0f);
 
     OGL_InitPrimitiveResources();
     if (!g_primProgram) return;
@@ -1463,7 +1504,7 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
             rect[1].t0 = cache.current[0]->offsetT - rect[1].t0;
         }
 
-        if (OGL.ARB_multitexture) glActiveTexture(GL_TEXTURE0);
+        glActiveTexture(GL_TEXTURE0);
 
         if ((rect[0].s0 >= 0.0f) && (rect[1].s0 <= cache.current[0]->width))
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1522,7 +1563,7 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
 
     if ((gDP.otherMode.cycleType == G_CYC_COPY) && !OGL.forceBilinear)
     {
-        if (OGL.ARB_multitexture) glActiveTexture(GL_TEXTURE0);
+        glActiveTexture(GL_TEXTURE0);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
