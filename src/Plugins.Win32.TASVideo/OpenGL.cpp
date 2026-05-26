@@ -36,6 +36,7 @@ static GLint g_n64UniAlphaTestFunction = -1;
 static GLint g_n64UniStippleEnabled = -1;
 static GLint g_n64UniStippleAlpha = -1;
 static GLint g_n64UniStipplePattern = -1;
+static GLint g_n64UniStippleBits = -1;
 // Combiner: packed (A,B,C,D) per cycle per channel
 static GLint g_n64UniCombine0RGB = -1;
 static GLint g_n64UniCombine0A = -1;
@@ -708,6 +709,15 @@ void OGL_DrawTriangles()
         OGL.lastStipple = (OGL.lastStipple + 1) & 0x7;
         state.stippleEnabled = 1;
         state.stipplePattern = OGL.lastStipple;
+        int threshold = ((BYTE)(gDP.envColor.a * 255.0f)) >> 3;
+        GLubyte *pattern = OGL.stipplePattern[threshold][OGL.lastStipple];
+        for (int y = 0; y < 32; y++)
+        {
+            GLubyte *row = pattern + y * 4;
+            state.stippleBits[y] =
+                ((unsigned int)row[0] << 24) | ((unsigned int)row[1] << 16) | ((unsigned int)row[2] << 8) |
+                ((unsigned int)row[3]);
+        }
     }
     else
     {
@@ -1019,6 +1029,7 @@ uniform int   uAlphaTestFunction;
 uniform bool uPolygonStippleEnabled;
 uniform int  uStippleAlpha;
 uniform int  uStipplePattern;
+uniform uint uStippleBits[32];
 
 uniform ivec4 uCombine0RGB;
 uniform ivec4 uCombine0A;
@@ -1110,10 +1121,12 @@ void main() {
             discard;
     }
 
-    // Polygon stipple (simplified grid based on pattern index)
+    // Polygon stipple (32x32 bitmask matching original glPolygonStipple behaviour)
     if (uPolygonStippleEnabled) {
-        ivec2 coord = ivec2(gl_FragCoord.xy);
-        if (((uStipplePattern + coord.x + coord.y) & 1) == 0)
+        ivec2 coord = ivec2(gl_FragCoord.xy) % 32;
+        uint word = uStippleBits[coord.y];
+        uint bit  = 1u << (31u - uint(coord.x));
+        if ((word & bit) == 0u)
             discard;
     }
 
@@ -1171,6 +1184,7 @@ void OGL_InitN64Resources()
     g_n64UniStippleEnabled = glGetUniformLocation(g_n64Program, "uPolygonStippleEnabled");
     g_n64UniStippleAlpha   = glGetUniformLocation(g_n64Program, "uStippleAlpha");
     g_n64UniStipplePattern = glGetUniformLocation(g_n64Program, "uStipplePattern");
+    g_n64UniStippleBits    = glGetUniformLocation(g_n64Program, "uStippleBits");
     g_n64UniCombine0RGB = glGetUniformLocation(g_n64Program, "uCombine0RGB");
     g_n64UniCombine0A = glGetUniformLocation(g_n64Program, "uCombine0A");
     g_n64UniCombine1RGB = glGetUniformLocation(g_n64Program, "uCombine1RGB");
@@ -1219,7 +1233,7 @@ void OGL_DestroyN64Resources()
     g_n64UniPrimColor = g_n64UniEnvColor = g_n64UniPrimLODFrac = g_n64UniFogColor = -1;
     g_n64UniFogEnabled = g_n64UniFogMultiplier = g_n64UniFogOffset = -1;
     g_n64UniAlphaTestEnabled = g_n64UniAlphaTestThreshold = g_n64UniAlphaTestFunction = -1;
-    g_n64UniStippleEnabled = g_n64UniStippleAlpha = g_n64UniStipplePattern = -1;
+    g_n64UniStippleEnabled = g_n64UniStippleAlpha = g_n64UniStipplePattern = g_n64UniStippleBits = -1;
     g_n64UniCombine0RGB = g_n64UniCombine0A = g_n64UniCombine1RGB = g_n64UniCombine1A = -1;
     g_n64UniNumCycles = -1;
     memset(&g_n64State, 0, sizeof(g_n64State));
@@ -1860,6 +1874,7 @@ void OGL_SetN64Combiner(const N64CombinerState *state)
     if (g_n64UniStippleEnabled >= 0) glUniform1i(g_n64UniStippleEnabled, state->stippleEnabled);
     if (g_n64UniStippleAlpha >= 0)   glUniform1i(g_n64UniStippleAlpha,   state->stippleAlpha);
     if (g_n64UniStipplePattern >= 0) glUniform1i(g_n64UniStipplePattern, state->stipplePattern);
+    if (g_n64UniStippleBits >= 0)    glUniform1uiv(g_n64UniStippleBits, 32, state->stippleBits);
 
     // Combiner: pack canonical (A, B, C, D) into ivec4 uniforms per cycle per channel
     if (g_n64UniCombine0RGB >= 0)

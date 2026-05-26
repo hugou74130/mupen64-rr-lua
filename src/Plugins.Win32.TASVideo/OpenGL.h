@@ -119,6 +119,7 @@ struct N64CombinerState
     int stippleEnabled;
     int stippleAlpha;
     int stipplePattern;
+    unsigned int stippleBits[32];
     // Cycle 0 RGB: (A - B) * C + D
     int saRGB0, sbRGB0, mRGB0, aRGB0;
     // Cycle 0 Alpha: (A - B) * C + D
