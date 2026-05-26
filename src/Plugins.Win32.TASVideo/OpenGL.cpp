@@ -12,6 +12,28 @@
 #include <format>
 #include <cstring>
 
+// ---------------------------------------------------------------------------
+// Debug helper: logs the first pending OpenGL error with a context string.
+// ---------------------------------------------------------------------------
+#ifdef _DEBUG
+static void OGL_CheckError(const wchar_t *context)
+{
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        g_ef->log_error(std::format(L"OpenGL error {} at {}", (int)err, context).c_str());
+    }
+}
+#define GL_CHECK(call)                                                                                                 \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        call;                                                                                                          \
+        OGL_CheckError(L"" #call);                                                                                     \
+    } while (0)
+#else
+#define GL_CHECK(call) call
+#endif
+
 GLInfo OGL{};
 
 static GLuint g_n64VAO = 0;
