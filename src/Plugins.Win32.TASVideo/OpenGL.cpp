@@ -130,6 +130,7 @@ bool OGL_InitStates()
     glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, sizeof(GLVertex), (void *)(16 * sizeof(float)));
 
     glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glPolygonOffset(-3.0f, -3.0f);
 
@@ -968,6 +969,7 @@ void OGL_InitPrimitiveResources()
     glEnableVertexAttribArray(3);
     glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 12 * sizeof(float), (void *)(10 * sizeof(float)));
     glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void OGL_DestroyPrimitiveResources()
@@ -1842,6 +1844,7 @@ void OGL_InitBlitResources()
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
     glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void OGL_DestroyBlitResources()
