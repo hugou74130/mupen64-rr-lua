@@ -745,6 +745,8 @@ void OGL_DrawTriangles()
         // skipped for any reason.
         OGL_SetN64Combiner(&state);
 
+        glActiveTexture(GL_TEXTURE0);
+
         glBindVertexArray(g_n64VAO);
         glBindBuffer(GL_ARRAY_BUFFER, g_n64VBO);
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(GLVertex) * OGL.numVertices, OGL.vertices);
@@ -1648,7 +1650,6 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
                 (combiner.usesT1 && OGL.ARB_multitexture) ? GL_TRUE : GL_FALSE);
 
     glActiveTexture(GL_TEXTURE0);
-    if (OGL.ARB_multitexture) glActiveTexture(GL_TEXTURE0);
 
     glBindVertexArray(g_primVAO);
     glBindBuffer(GL_ARRAY_BUFFER, g_primVBO);

@@ -262,6 +262,7 @@ void Combiner_Destroy()
         // glDisable(GL_TEXTURE_2D) is deprecated in Core OpenGL / unavailable
         // in GLES.  Texture binding is managed via uUseTextureN uniforms.
     }
+    glActiveTexture(GL_TEXTURE0);
 }
 
 void Combiner_BeginTextureUpdate()
