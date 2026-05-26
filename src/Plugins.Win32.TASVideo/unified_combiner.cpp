@@ -562,7 +562,7 @@ void Uninit_unified_combiner()
 
 UnifiedCompiledCombiner *Compile_unified_combiner(Combiner *color, Combiner *alpha)
 {
-    auto compiled = (UnifiedCompiledCombiner *)malloc(sizeof(UnifiedCompiledCombiner));
+    auto compiled = (UnifiedCompiledCombiner *)calloc(1, sizeof(UnifiedCompiledCombiner));
     Compile(compiled, color, alpha);
     return compiled;
 }

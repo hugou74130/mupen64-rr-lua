@@ -34,6 +34,7 @@ static GLint g_n64UniAlphaTestEnabled = -1;
 static GLint g_n64UniAlphaTestThreshold = -1;
 static GLint g_n64UniAlphaTestFunction = -1;
 static GLint g_n64UniStippleEnabled = -1;
+static GLint g_n64UniStippleAlpha = -1;
 static GLint g_n64UniStipplePattern = -1;
 // Combiner: packed (A,B,C,D) per cycle per channel
 static GLint g_n64UniCombine0RGB = -1;
@@ -576,6 +577,10 @@ void OGL_AddTriangle(SPVertex *vertices, int v0, int v1, int v2)
 
     for (int i = 0; i < 3; i++)
     {
+        // Zero-initialize the whole vertex so that fields the shader always
+        // reads (secondaryColor, fog, texcoords) never contain stale data.
+        memset(&OGL.vertices[OGL.numVertices], 0, sizeof(GLVertex));
+
         OGL.vertices[OGL.numVertices].x = vertices[v[i]].x;
         OGL.vertices[OGL.numVertices].y = vertices[v[i]].y;
         OGL.vertices[OGL.numVertices].z =
@@ -687,7 +692,7 @@ void OGL_AddTriangle(SPVertex *vertices, int v0, int v1, int v2)
     }
     OGL.numTriangles++;
 
-    if (OGL.numVertices >= 255) OGL_DrawTriangles();
+    if (OGL.numVertices + 3 > 256) OGL_DrawTriangles();
 }
 
 void OGL_DrawTriangles()
@@ -773,6 +778,7 @@ static GLint g_primUniUseOrtho = -1;
 static GLint g_primUniUseTexture = -1;
 static GLint g_primUniTexture0 = -1;
 static GLint g_primUniTexture1 = -1;
+static GLint g_primUniUseMultiTexture = -1;
 
 static const char *g_primVS = GLSL_VERSION_HEADER R"(
 #ifdef GL_ES
@@ -858,7 +864,11 @@ void OGL_InitPrimitiveResources()
     if (g_primProgram) return;
     GLuint vs = CompileShader(GL_VERTEX_SHADER, g_primVS);
     GLuint fs = CompileShader(GL_FRAGMENT_SHADER, g_primFS);
-    if (!vs || !fs) return;
+    if (!vs || !fs) {
+        if (vs) glDeleteShader(vs);
+        if (fs) glDeleteShader(fs);
+        return;
+    }
     g_primProgram = glCreateProgram();
     glAttachShader(g_primProgram, vs);
     glAttachShader(g_primProgram, fs);
@@ -887,6 +897,7 @@ void OGL_InitPrimitiveResources()
     g_primUniUseTexture = glGetUniformLocation(g_primProgram, "uUseTexture");
     g_primUniTexture0 = glGetUniformLocation(g_primProgram, "uTexture0");
     g_primUniTexture1 = glGetUniformLocation(g_primProgram, "uTexture1");
+    g_primUniUseMultiTexture = glGetUniformLocation(g_primProgram, "uUseMultiTexture");
 
     glGenVertexArrays(1, &g_primVAO);
     glGenBuffers(1, &g_primVBO);
@@ -922,7 +933,7 @@ void OGL_DestroyPrimitiveResources()
         glDeleteProgram(g_primProgram);
         g_primProgram = 0;
     }
-    g_primUniOrtho = g_primUniUseOrtho = g_primUniUseTexture = g_primUniTexture0 = g_primUniTexture1 = -1;
+    g_primUniOrtho = g_primUniUseOrtho = g_primUniUseTexture = g_primUniTexture0 = g_primUniTexture1 = g_primUniUseMultiTexture = -1;
 }
 
 // ---- Core OpenGL N64 Pipeline Resources (3D rendering) ----
@@ -1004,6 +1015,7 @@ uniform float uAlphaTestThreshold;
 uniform int   uAlphaTestFunction;
 
 uniform bool uPolygonStippleEnabled;
+uniform int  uStippleAlpha;
 uniform int  uStipplePattern;
 
 uniform ivec4 uCombine0RGB;
@@ -1064,16 +1076,46 @@ vec4 combinerCycle(ivec4 rgbABCD, ivec4 alphaABCD,
 }
 
 void main() {
-    // DIAGNOSTIC: direct texture passthrough to isolate the white-render bug.
-    //  - If trees show their real texture (green/brown) → texture pipeline is OK,
-    //    the bug is in combinerCycle / resolveInput.
-    //  - If trees are RED → uUseTexture0 is false (combiner.usesT0 is wrong).
-    //  - If trees are WHITE → texture() returns white (binding/sampler/texcoords bug).
-    if (uUseTexture0) {
-        FragColor = texture(uTexture0, vTexCoord0);
-    } else {
-        FragColor = vec4(1.0, 0.0, 0.0, 1.0); // RED = no texture flag
+    vec4 texel0 = uUseTexture0 ? texture(uTexture0, vTexCoord0) : vec4(1.0);
+    vec4 texel1 = uUseTexture1 ? texture(uTexture1, vTexCoord1) : vec4(1.0);
+    vec4 shade  = vColor;
+    vec4 combined = vec4(0.0);
+
+    // Cycle 0
+    if (uNumCycles >= 1)
+        combined = combinerCycle(uCombine0RGB, uCombine0A, texel0, texel1, combined, shade);
+
+    // Cycle 1
+    if (uNumCycles >= 2)
+        combined = combinerCycle(uCombine1RGB, uCombine1A, texel0, texel1, combined, shade);
+
+    vec4 finalColor = combined;
+
+    // Fog
+    if (uFogEnabled) {
+        float fogFactor = clamp(vFog * uFogMultiplier + uFogOffset, 0.0, 1.0);
+        finalColor.rgb = mix(finalColor.rgb, uFogColor.rgb, fogFactor);
     }
+
+    // Alpha test
+    if (uAlphaTestEnabled) {
+        bool pass;
+        if (uAlphaTestFunction == 1) // GEQUAL
+            pass = finalColor.a >= uAlphaTestThreshold;
+        else                         // GREATER
+            pass = finalColor.a > uAlphaTestThreshold;
+        if (!pass)
+            discard;
+    }
+
+    // Polygon stipple (simplified grid based on pattern index)
+    if (uPolygonStippleEnabled) {
+        ivec2 coord = ivec2(gl_FragCoord.xy);
+        if (((uStipplePattern + coord.x + coord.y) & 1) == 0)
+            discard;
+    }
+
+    FragColor = finalColor;
 }
 )";
 
@@ -1125,6 +1167,7 @@ void OGL_InitN64Resources()
     g_n64UniAlphaTestThreshold = glGetUniformLocation(g_n64Program, "uAlphaTestThreshold");
     g_n64UniAlphaTestFunction = glGetUniformLocation(g_n64Program, "uAlphaTestFunction");
     g_n64UniStippleEnabled = glGetUniformLocation(g_n64Program, "uPolygonStippleEnabled");
+    g_n64UniStippleAlpha   = glGetUniformLocation(g_n64Program, "uStippleAlpha");
     g_n64UniStipplePattern = glGetUniformLocation(g_n64Program, "uStipplePattern");
     g_n64UniCombine0RGB = glGetUniformLocation(g_n64Program, "uCombine0RGB");
     g_n64UniCombine0A = glGetUniformLocation(g_n64Program, "uCombine0A");
@@ -1174,7 +1217,7 @@ void OGL_DestroyN64Resources()
     g_n64UniPrimColor = g_n64UniEnvColor = g_n64UniPrimLODFrac = g_n64UniFogColor = -1;
     g_n64UniFogEnabled = g_n64UniFogMultiplier = g_n64UniFogOffset = -1;
     g_n64UniAlphaTestEnabled = g_n64UniAlphaTestThreshold = g_n64UniAlphaTestFunction = -1;
-    g_n64UniStippleEnabled = g_n64UniStipplePattern = -1;
+    g_n64UniStippleEnabled = g_n64UniStippleAlpha = g_n64UniStipplePattern = -1;
     g_n64UniCombine0RGB = g_n64UniCombine0A = g_n64UniCombine1RGB = g_n64UniCombine1A = -1;
     g_n64UniNumCycles = -1;
     memset(&g_n64State, 0, sizeof(g_n64State));
@@ -1601,7 +1644,7 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
     glUniform1i(g_primUniUseTexture, combiner.usesT0 ? GL_TRUE : GL_FALSE);
     glUniform1i(g_primUniTexture0, 0);
     glUniform1i(g_primUniTexture1, 1);
-    glUniform1i(glGetUniformLocation(g_primProgram, "uUseMultiTexture"),
+    glUniform1i(g_primUniUseMultiTexture,
                 (combiner.usesT1 && OGL.ARB_multitexture) ? GL_TRUE : GL_FALSE);
 
     glActiveTexture(GL_TEXTURE0);
@@ -1695,7 +1738,11 @@ void OGL_InitBlitResources()
     if (g_blitProgram) return;
     GLuint vs = CompileShader(GL_VERTEX_SHADER, g_blitVS);
     GLuint fs = CompileShader(GL_FRAGMENT_SHADER, g_blitFS);
-    if (!vs || !fs) return;
+    if (!vs || !fs) {
+        if (vs) glDeleteShader(vs);
+        if (fs) glDeleteShader(fs);
+        return;
+    }
     g_blitProgram = glCreateProgram();
     glAttachShader(g_blitProgram, vs);
     glAttachShader(g_blitProgram, fs);
@@ -1810,6 +1857,7 @@ void OGL_SetN64Combiner(const N64CombinerState *state)
 
     // Polygon stipple
     if (g_n64UniStippleEnabled >= 0) glUniform1i(g_n64UniStippleEnabled, state->stippleEnabled);
+    if (g_n64UniStippleAlpha >= 0)   glUniform1i(g_n64UniStippleAlpha,   state->stippleAlpha);
     if (g_n64UniStipplePattern >= 0) glUniform1i(g_n64UniStipplePattern, state->stipplePattern);
 
     // Combiner: pack canonical (A, B, C, D) into ivec4 uniforms per cycle per channel
