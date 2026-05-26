@@ -692,7 +692,7 @@ void OGL_AddTriangle(SPVertex *vertices, int v0, int v1, int v2)
     }
     OGL.numTriangles++;
 
-    if (OGL.numVertices + 3 > 256) OGL_DrawTriangles();
+    if (OGL.numVertices > 252) OGL_DrawTriangles();
 }
 
 void OGL_DrawTriangles()
