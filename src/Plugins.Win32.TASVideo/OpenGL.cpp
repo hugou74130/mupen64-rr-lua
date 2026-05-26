@@ -63,13 +63,13 @@ void OGL_ReadPixels()
     glReadBuffer(oldMode); // restore old read buffer
 }
 
-void OGL_InitExtensions()
+bool OGL_InitExtensions()
 {
     GLenum glew = glewInit();
     if (glew != GLEW_OK)
     {
         g_ef->log_error(L"Error initialising glew");
-        return;
+        return FALSE;
     }
 
     OGL.ARB_multitexture = GLEW_ARB_multitexture;
@@ -81,9 +81,10 @@ void OGL_InitExtensions()
     OGL.ARB_texture_env_combine = GLEW_ARB_texture_env_combine;
     OGL.ARB_texture_env_crossbar = GLEW_ARB_texture_env_crossbar;
     OGL.EXT_texture_env_combine = GLEW_EXT_texture_env_combine;
+    return TRUE;
 }
 
-void OGL_InitStates()
+bool OGL_InitStates()
 {
     // Legacy fixed-function matrix setup removed — N64 vertices are already in
     // clip-space and shaders handle projection via uniforms.
@@ -95,7 +96,11 @@ void OGL_InitStates()
     // (glTexEnv) has been shaderized — see unified_combiner.cpp and
     // OGL_SetN64Combiner().
     OGL_InitN64Resources();
-    if (!g_n64Program) return;
+    if (!g_n64Program)
+    {
+        g_ef->log_error(L"N64 shader init failed — pipeline unavailable");
+        return FALSE;
+    }
 
     glBindVertexArray(g_n64VAO);
     glBindBuffer(GL_ARRAY_BUFFER, g_n64VBO);
@@ -349,8 +354,8 @@ bool OGL_InitContext()
 {
     if (!OGL_CreateContext()) return FALSE;
 
-    OGL_InitExtensions();
-    OGL_InitStates();
+    if (!OGL_InitExtensions()) return FALSE;
+    if (!OGL_InitStates()) return FALSE;
     return TRUE;
 }
 
