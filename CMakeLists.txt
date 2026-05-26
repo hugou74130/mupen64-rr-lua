@@ -31,6 +31,13 @@ if(NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
   set(MUPEN64RR_BUILD_WIN32 OFF CACHE BOOL "If on, enables the Win32 view and plugins. (FORCE-DISABLED)" FORCE)
 endif()
 
+# OpenGL ES / ANGLE support
+set(USE_OPENGL_ES OFF CACHE BOOL "If on, builds for OpenGL ES / ANGLE instead of desktop OpenGL.")
+if(USE_OPENGL_ES)
+  message(STATUS "OpenGL ES / ANGLE mode enabled")
+  add_compile_definitions(USE_OPENGL_ES)
+endif()
+
 # Basic checks and setup
 # ===========================================
 
