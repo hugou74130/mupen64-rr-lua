@@ -419,4 +419,4 @@ FodyWeavers.xsd
 
 # API Documentation
 docs/lua/export/doc.json
-docs/lua/export/doc.md
+docs/lua/export/doc.mdbuild_*/
