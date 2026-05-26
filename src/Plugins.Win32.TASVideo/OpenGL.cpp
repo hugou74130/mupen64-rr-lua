@@ -1508,6 +1508,24 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
     glDisable(GL_CULL_FACE);
     glViewport(0, OGL.heightOffset, OGL.width, OGL.height);
 
+    // Save texture parameters that we are about to mutate.
+    GLint oldWrapS0 = 0, oldWrapT0 = 0, oldMin0 = 0, oldMag0 = 0;
+    GLint oldWrapS1 = 0, oldWrapT1 = 0;
+    if (combiner.usesT0)
+    {
+        glActiveTexture(GL_TEXTURE0);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, &oldWrapS0);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, &oldWrapT0);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, &oldMin0);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, &oldMag0);
+    }
+    if (combiner.usesT1)
+    {
+        glActiveTexture(GL_TEXTURE1);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, &oldWrapS1);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, &oldWrapT1);
+    }
+
     if (combiner.usesT0)
     {
         rect[0].s0 = rect[0].s0 * cache.current[0]->shiftScaleS - gSP.textureTile[0]->fuls;
@@ -1551,7 +1569,7 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
         rect[1].t0 *= cache.current[0]->scaleT;
     }
 
-    if (combiner.usesT1 && OGL.ARB_multitexture)
+    if (combiner.usesT1)
     {
         rect[0].s1 = rect[0].s1 * cache.current[1]->shiftScaleS - gSP.textureTile[1]->fuls;
         rect[0].t1 = rect[0].t1 * cache.current[1]->shiftScaleT - gSP.textureTile[1]->fult;
@@ -1625,23 +1643,20 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
     float t1_lr_s = rect[1].s1, t1_lr_t = rect[1].t1;
     float t1_ll_s = rect[0].s1, t1_ll_t = rect[1].t1;
 
-    if (!OGL.ARB_multitexture)
+    // Non-multitexture flip logic is still needed for single-texture rect draws
+    if (flip)
     {
-        // Non-multitexture path with flip (matches original logic exactly)
-        if (flip)
-        {
-            t0_ur_s = rect[1].s0;
-            t0_ur_t = rect[0].t0;
-            t0_ll_s = rect[1].s0;
-            t0_ll_t = rect[0].t0;
-        }
-        else
-        {
-            t0_ur_s = rect[0].s0;
-            t0_ur_t = rect[1].t0;
-            t0_ll_s = rect[1].s0;
-            t0_ll_t = rect[0].t0;
-        }
+        t0_ur_s = rect[1].s0;
+        t0_ur_t = rect[0].t0;
+        t0_ll_s = rect[1].s0;
+        t0_ll_t = rect[0].t0;
+    }
+    else
+    {
+        t0_ur_s = rect[0].s0;
+        t0_ur_t = rect[1].t0;
+        t0_ll_s = rect[1].s0;
+        t0_ll_t = rect[0].t0;
     }
 
     // All vertices share the same primary color (SetConstant was called once)
@@ -1734,8 +1749,7 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
     glUniform1i(g_primUniUseTexture, combiner.usesT0 ? GL_TRUE : GL_FALSE);
     glUniform1i(g_primUniTexture0, 0);
     glUniform1i(g_primUniTexture1, 1);
-    glUniform1i(g_primUniUseMultiTexture,
-                (combiner.usesT1 && OGL.ARB_multitexture) ? GL_TRUE : GL_FALSE);
+    glUniform1i(g_primUniUseMultiTexture, combiner.usesT1 ? GL_TRUE : GL_FALSE);
 
     glActiveTexture(GL_TEXTURE0);
 
@@ -1744,6 +1758,23 @@ void OGL_DrawTexturedRect(float ulx, float uly, float lrx, float lry, float uls,
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(data), data);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
+
+    // Restore texture parameters so we don't corrupt the cache for later draws.
+    if (combiner.usesT0)
+    {
+        glActiveTexture(GL_TEXTURE0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, oldWrapS0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, oldWrapT0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, oldMin0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, oldMag0);
+    }
+    if (combiner.usesT1)
+    {
+        glActiveTexture(GL_TEXTURE1);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, oldWrapS1);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, oldWrapT1);
+    }
+    glActiveTexture(GL_TEXTURE0);
 
     OGL_UpdateCullFace();
     OGL_UpdateViewport();
