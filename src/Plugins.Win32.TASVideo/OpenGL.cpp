@@ -789,10 +789,8 @@ void OGL_DrawTriangles()
                           (combiner.usesT1 && cache.current[1]) ? cache.current[1]->glName : cache.dummy->glName);
         }
 
-        glUniform1i(g_n64UniUseTexture0, combiner.usesT0 ? GL_TRUE : GL_FALSE);
-        glUniform1i(g_n64UniUseTexture1, combiner.usesT1 ? GL_TRUE : GL_FALSE);
-        glUniform1i(g_n64UniTexture0, 0);
-        glUniform1i(g_n64UniTexture1, 1);
+        glUniform1i(g_n64UniUseTexture0, combiner.usesT0 ? 1 : 0);
+        glUniform1i(g_n64UniUseTexture1, combiner.usesT1 ? 1 : 0);
 
         // Re-upload the full combiner state so that stipple (which changes
         // per-draw) is correct and we are safe if OGL_UpdateStates() was
@@ -1214,6 +1212,12 @@ void OGL_InitN64Resources()
     g_n64UniTexture1 = glGetUniformLocation(g_n64Program, "uTexture1");
     g_n64UniUseTexture0 = glGetUniformLocation(g_n64Program, "uUseTexture0");
     g_n64UniUseTexture1 = glGetUniformLocation(g_n64Program, "uUseTexture1");
+
+    // Sampler units never change — upload once here.
+    glUseProgram(g_n64Program);
+    glUniform1i(g_n64UniTexture0, 0);
+    glUniform1i(g_n64UniTexture1, 1);
+    glUseProgram(0);
 
     // N64 uber-combiner uniform locations
     g_n64UniPrimColor = glGetUniformLocation(g_n64Program, "uPrimColor");
