@@ -11,24 +11,44 @@
 3. **Package the core as a dynamic library** (`.dll` / `.so` / `.dylib`).
 4. **Enable frontend bindings** in safer languages (C#, Rust, etc.).
 
-## Current State
+## Implementation Plan (3 Phases)
 
-| Task | Status |
-|------|--------|
-| Audit `core_api.h` for C++-only types | 🔲 Not started |
-| Design C-compatible struct / handle layout | 🔲 Not started |
-| Replace `std::string` with `const char*` | 🔲 Not started |
-| Replace `std::vector` with size + pointer pairs | 🔲 Not started |
-| Add `extern "C"` wrapper layer | 🔲 Not started |
-| Update build system (CMake) for `SHARED` target | 🔲 Not started |
-| Write C# / Rust binding PoC | 🔲 Not started |
-| CI validation across platforms | 🔲 Not started |
+### Phase 1 — API Survey
+
+Map `core_api.h` + all included headers, **and the config library**.
+
+| Task | Approach | Status |
+|------|----------|--------|
+| Map `core_api.h` + included headers | Full dependency graph of C++-only types | 🔲 Not started |
+| Map config library | Identify STL usage in config layer | 🔲 Not started |
+| STL → C replacements | `std::string` / `std::vector` become `(pointer, size)` pairs in parameters | 🔲 Not started |
+| Return value strategy | `malloc()`-backed struct with pointer+size, caller `free()`s | 🔲 Not started |
+| Callback userdata analysis | Most core functions are raw functions or lambdas — per-callback `void* userdata` may be unnecessary | 🔲 Not started |
+| Heap vs. in-out buffers | Catalog which return types need heap-allocated output vs. caller-provided in-out buffers | 🔲 Not started |
+
+### Phase 2 — C Header + C++ Wrapper
+
+| Task | Approach | Status |
+|------|----------|--------|
+| Draft `m64core.h` | Opaque handles (`typedef struct M64Core* M64CoreHandle;`) and flat C functions | 🔲 Not started |
+| C++ convenience wrapper | Thin C++ layer over the C surface so the GUI side stays clean | 🔲 Not started |
+| Build target | `m64core.dll` / `libm64core.so` via CMake `SHARED` | 🔲 Not started |
+
+### Phase 3 — Incremental PRs
+
+| Task | Approach | Status |
+|------|----------|--------|
+| POC subset | ROM loading + frame stepping as minimal viable subset | 🔲 Not started |
+| Expand in chunks | Reviewable PRs per subsystem (video, audio, input, RSP, config) | 🔲 Not started |
+| Config library | Separate follow-up PR for config layer migration | 🔲 Not started |
+| Cross-platform CI | Validate on Windows (MSVC), Linux (GCC/Clang), macOS | 🔲 Not started |
+| Binding PoC | C# / Rust / Python proof-of-concept frontend | 🔲 Not started |
 
 ## Known Blockers
 
 - Heavy use of C++ templates and STL containers inside `core_api.h`.
 - Callback signatures currently pass C++ objects by reference.
-- Need to decide on opaque handle strategy (`typedef struct M64Core* M64CoreHandle;`).
+- Config library is deeply intertwined with the C++ STL.
 
 ## Notes
 
