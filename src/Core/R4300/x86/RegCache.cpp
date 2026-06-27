@@ -65,14 +65,14 @@ void free_register(int32_t reg)
     while (last <= dst)
     {
         if (last_access[reg] != NULL && dirty[reg])
-            last->reg_cache_infos.needed_registers[reg] = reg_content[reg];
+            last->reg_cache_infos.needed_registers[reg] = (void*)(uintptr_t)reg_content[reg];
         else
             last->reg_cache_infos.needed_registers[reg] = NULL;
 
         if (last_access[reg] != NULL && r64[reg] != -1)
         {
             if (dirty[r64[reg]])
-                last->reg_cache_infos.needed_registers[r64[reg]] = reg_content[r64[reg]];
+                last->reg_cache_infos.needed_registers[r64[reg]] = (void*)(uintptr_t)reg_content[r64[reg]];
             else
                 last->reg_cache_infos.needed_registers[r64[reg]] = NULL;
         }
@@ -87,14 +87,14 @@ void free_register(int32_t reg)
 
     if (dirty[reg])
     {
-        mov_m32_reg32(reg_content[reg], reg);
+        mov_m32_reg32((void*)(uintptr_t)reg_content[reg], reg);
         if (r64[reg] == -1)
         {
             sar_reg32_imm8(reg, 31);
-            mov_m32_reg32((uint32_t *)reg_content[reg] + 1, reg);
+            mov_m32_reg32((void*)((uint32_t *)(uintptr_t)reg_content[reg] + 1), reg);
         }
         else
-            mov_m32_reg32(reg_content[r64[reg]], r64[reg]);
+            mov_m32_reg32((void*)(uintptr_t)reg_content[r64[reg]], r64[reg]);
     }
     last_access[reg] = NULL;
     free_since[reg] = dst + 1;
@@ -155,7 +155,7 @@ int32_t allocate_register(uintptr_t addr)
 
                 while (last <= dst)
                 {
-                    last->reg_cache_infos.needed_registers[i] = reg_content[i];
+                    last->reg_cache_infos.needed_registers[i] = (void*)(uintptr_t)reg_content[i];
                     last++;
                 }
                 last_access[i] = dst;
@@ -165,7 +165,7 @@ int32_t allocate_register(uintptr_t addr)
 
                     while (last <= dst)
                     {
-                        last->reg_cache_infos.needed_registers[r64[i]] = reg_content[r64[i]];
+                        last->reg_cache_infos.needed_registers[r64[i]] = (void*)(uintptr_t)reg_content[r64[i]];
                         last++;
                     }
                     last_access[r64[i]] = dst;
@@ -527,12 +527,12 @@ void force_32(int32_t reg)
         while (last <= dst)
         {
             if (dirty[reg])
-                last->reg_cache_infos.needed_registers[reg] = reg_content[reg];
+                last->reg_cache_infos.needed_registers[reg] = (void*)(uintptr_t)reg_content[reg];
             else
                 last->reg_cache_infos.needed_registers[reg] = NULL;
 
             if (dirty[r64[reg]])
-                last->reg_cache_infos.needed_registers[r64[reg]] = reg_content[r64[reg]];
+                last->reg_cache_infos.needed_registers[r64[reg]] = (void*)(uintptr_t)reg_content[r64[reg]];
             else
                 last->reg_cache_infos.needed_registers[r64[reg]] = NULL;
 
@@ -541,8 +541,8 @@ void force_32(int32_t reg)
 
         if (dirty[reg])
         {
-            mov_m32_reg32(reg_content[reg], reg);
-            mov_m32_reg32(reg_content[r64[reg]], r64[reg]);
+            mov_m32_reg32((void*)(uintptr_t)reg_content[reg], reg);
+            mov_m32_reg32((void*)(uintptr_t)reg_content[r64[reg]], r64[reg]);
             dirty[reg] = 0;
         }
         last_access[r64[reg]] = NULL;
@@ -561,7 +561,7 @@ void allocate_register_manually(int32_t reg, uintptr_t addr)
 
         while (last <= dst)
         {
-            last->reg_cache_infos.needed_registers[reg] = reg_content[reg];
+            last->reg_cache_infos.needed_registers[reg] = (void*)(uintptr_t)reg_content[reg];
             last++;
         }
         last_access[reg] = dst;
@@ -571,7 +571,7 @@ void allocate_register_manually(int32_t reg, uintptr_t addr)
 
             while (last <= dst)
             {
-                last->reg_cache_infos.needed_registers[r64[reg]] = reg_content[r64[reg]];
+                last->reg_cache_infos.needed_registers[r64[reg]] = (void*)(uintptr_t)reg_content[r64[reg]];
                 last++;
             }
             last_access[r64[reg]] = dst;
@@ -599,7 +599,7 @@ void allocate_register_manually(int32_t reg, uintptr_t addr)
 
             while (last <= dst)
             {
-                last->reg_cache_infos.needed_registers[i] = reg_content[i];
+                last->reg_cache_infos.needed_registers[i] = (void*)(uintptr_t)reg_content[i];
                 last++;
             }
             last_access[i] = dst;
@@ -609,7 +609,7 @@ void allocate_register_manually(int32_t reg, uintptr_t addr)
 
                 while (last <= dst)
                 {
-                    last->reg_cache_infos.needed_registers[r64[i]] = reg_content[r64[i]];
+                    last->reg_cache_infos.needed_registers[r64[i]] = (void*)(uintptr_t)reg_content[r64[i]];
                     last++;
                 }
                 last_access[r64[i]] = dst;
@@ -652,7 +652,7 @@ void allocate_register_manually_w(int32_t reg, uintptr_t addr, int32_t load)
 
         while (last <= dst)
         {
-            last->reg_cache_infos.needed_registers[reg] = reg_content[reg];
+            last->reg_cache_infos.needed_registers[reg] = (void*)(uintptr_t)reg_content[reg];
             last++;
         }
         last_access[reg] = dst;
@@ -663,7 +663,7 @@ void allocate_register_manually_w(int32_t reg, uintptr_t addr, int32_t load)
 
             while (last <= dst)
             {
-                last->reg_cache_infos.needed_registers[r64[reg]] = reg_content[r64[reg]];
+                last->reg_cache_infos.needed_registers[r64[reg]] = (void*)(uintptr_t)reg_content[r64[reg]];
                 last++;
             }
             last_access[r64[reg]] = NULL;
@@ -694,7 +694,7 @@ void allocate_register_manually_w(int32_t reg, uintptr_t addr, int32_t load)
 
             while (last <= dst)
             {
-                last->reg_cache_infos.needed_registers[i] = reg_content[i];
+                last->reg_cache_infos.needed_registers[i] = (void*)(uintptr_t)reg_content[i];
                 last++;
             }
             last_access[i] = dst;
@@ -770,11 +770,11 @@ void build_wrapper(precomp_instr *instr, unsigned char *code, precomp_block *blo
     code[j++] = 0x00;
 
     code[j++] = 0xA1;
-    *((uintptr_t *)&code[j]) = (uintptr_t)(&block->code);
+    *((uint32_t *)&code[j]) = (uint32_t)(uintptr_t)(&block->code);
     j += 4;
 
     code[j++] = 0x05;
-    *((uintptr_t *)&code[j]) = (uintptr_t)instr->local_addr;
+    *((uint32_t *)&code[j]) = (uint32_t)(uintptr_t)instr->local_addr;
     j += 4;
 
     code[j++] = 0x89;
@@ -788,7 +788,7 @@ void build_wrapper(precomp_instr *instr, unsigned char *code, precomp_block *blo
             code[j++] = 0x8B;
             code[j++] = (i << 3) | 5;
             // *((uint32_t *)&code[j]) = (uint32_t)instr->reg_cache_infos.needed_registers[i];
-            *((uintptr_t *)&code[j]) = (uintptr_t)instr->reg_cache_infos.needed_registers[i];
+            *((uint32_t *)&code[j]) = (uint32_t)(uintptr_t)instr->reg_cache_infos.needed_registers[i];
             j += 4;
         }
     }

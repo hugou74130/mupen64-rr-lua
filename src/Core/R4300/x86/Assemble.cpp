@@ -57,7 +57,7 @@ static void add_jump(uint32_t pc_addr, uint32_t mi_addr)
 void passe2(precomp_instr *dest, int32_t start, int32_t end, precomp_block *block)
 {
     uint32_t i, real_code_length;
-    uintptr_t addr_dest;
+    uint32_t addr_dest;
     build_wrappers(dest, start, end, block);
     real_code_length = code_length;
 
@@ -66,13 +66,13 @@ void passe2(precomp_instr *dest, int32_t start, int32_t end, precomp_block *bloc
         code_length = jumps_table[i].pc_addr;
         if (dest[(jumps_table[i].mi_addr - dest[0].addr) / 4].reg_cache_infos.need_map)
         {
-            addr_dest = (uintptr_t)dest[(jumps_table[i].mi_addr - dest[0].addr) / 4].reg_cache_infos.jump_wrapper;
-            put64(addr_dest - ((uintptr_t)block->code + code_length) - 4);
+            addr_dest = (uint32_t)(uintptr_t)dest[(jumps_table[i].mi_addr - dest[0].addr) / 4].reg_cache_infos.jump_wrapper;
+            put32((uint32_t)(addr_dest - ((uintptr_t)block->code + code_length) - 4));
         }
         else
         {
-            addr_dest = (uintptr_t)dest[(jumps_table[i].mi_addr - dest[0].addr) / 4].local_addr;
-            put64(addr_dest - code_length - 4);
+            addr_dest = (uint32_t)(uintptr_t)dest[(jumps_table[i].mi_addr - dest[0].addr) / 4].local_addr;
+            put32((uint32_t)(addr_dest - code_length - 4));
         }
     }
     code_length = real_code_length;
@@ -461,6 +461,13 @@ void mov_reg32_imm32(int32_t reg32, uint32_t imm32)
     put32(imm32);
 }
 
+void mov_reg32_imm64(int32_t reg32, uint64_t imm64)
+{
+    put8(0x48); // REX.W prefix for 64-bit operand size
+    put8(0xB8 + reg32);
+    put64(imm64);
+}
+
 void jmp_imm(int32_t saut)
 {
     put8(0xE9);
@@ -632,6 +639,12 @@ void mov_m32_imm32(void *_m32, uint32_t imm32)
     put8(0x05);
     put64((uintptr_t)(_m32));
     put32(imm32);
+}
+
+void mov_m32_imm64(void *_m32, uint64_t imm64)
+{
+    mov_m32_imm32(_m32, (uint32_t)imm64);
+    mov_m32_imm32((void *)((char *)_m32 + 4), (uint32_t)(imm64 >> 32));
 }
 
 void jmp(uint32_t mi_addr)
