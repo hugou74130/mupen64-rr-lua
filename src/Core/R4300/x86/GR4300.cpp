@@ -316,13 +316,13 @@ void genjal_idle()
 
 void genbeq_test()
 {
-    int32_t rs_64bit = is64((uint32_t *)dst->f.i.rs);
-    int32_t rt_64bit = is64((uint32_t *)dst->f.i.rt);
+    int32_t rs_64bit = is64((uintptr_t)dst->f.i.rs);
+    int32_t rt_64bit = is64((uintptr_t)dst->f.i.rt);
 
     if (!rs_64bit && !rt_64bit)
     {
-        int32_t rs = allocate_register((uint32_t *)dst->f.i.rs);
-        int32_t rt = allocate_register((uint32_t *)dst->f.i.rt);
+        int32_t rs = allocate_register((uintptr_t)dst->f.i.rs);
+        int32_t rt = allocate_register((uintptr_t)dst->f.i.rt);
 
         cmp_reg32_reg32(rs, rt);
         jne_rj(12);
@@ -332,8 +332,8 @@ void genbeq_test()
     }
     else if (rs_64bit == -1)
     {
-        int32_t rt1 = allocate_64_register1((uint32_t *)dst->f.i.rt);
-        int32_t rt2 = allocate_64_register2((uint32_t *)dst->f.i.rt);
+        int32_t rt1 = allocate_64_register1((uintptr_t)dst->f.i.rt);
+        int32_t rt2 = allocate_64_register2((uintptr_t)dst->f.i.rt);
 
         cmp_reg32_m32(rt1, (uint32_t *)dst->f.i.rs);
         jne_rj(20);
@@ -345,8 +345,8 @@ void genbeq_test()
     }
     else if (rt_64bit == -1)
     {
-        int32_t rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-        int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
+        int32_t rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+        int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
 
         cmp_reg32_m32(rs1, (uint32_t *)dst->f.i.rt);
         jne_rj(20);
@@ -361,17 +361,17 @@ void genbeq_test()
         int32_t rs1, rs2, rt1, rt2;
         if (!rs_64bit)
         {
-            rt1 = allocate_64_register1((uint32_t *)dst->f.i.rt);
-            rt2 = allocate_64_register2((uint32_t *)dst->f.i.rt);
-            rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-            rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
+            rt1 = allocate_64_register1((uintptr_t)dst->f.i.rt);
+            rt2 = allocate_64_register2((uintptr_t)dst->f.i.rt);
+            rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+            rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
         }
         else
         {
-            rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-            rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
-            rt1 = allocate_64_register1((uint32_t *)dst->f.i.rt);
-            rt2 = allocate_64_register2((uint32_t *)dst->f.i.rt);
+            rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+            rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
+            rt1 = allocate_64_register1((uintptr_t)dst->f.i.rt);
+            rt2 = allocate_64_register2((uintptr_t)dst->f.i.rt);
         }
         cmp_reg32_reg32(rs1, rt1);
         jne_rj(16);
@@ -508,13 +508,13 @@ void genbeq_idle()
 
 void genbne_test()
 {
-    int32_t rs_64bit = is64((uint32_t *)dst->f.i.rs);
-    int32_t rt_64bit = is64((uint32_t *)dst->f.i.rt);
+    int32_t rs_64bit = is64((uintptr_t)dst->f.i.rs);
+    int32_t rt_64bit = is64((uintptr_t)dst->f.i.rt);
 
     if (!rs_64bit && !rt_64bit)
     {
-        int32_t rs = allocate_register((uint32_t *)dst->f.i.rs);
-        int32_t rt = allocate_register((uint32_t *)dst->f.i.rt);
+        int32_t rs = allocate_register((uintptr_t)dst->f.i.rs);
+        int32_t rt = allocate_register((uintptr_t)dst->f.i.rt);
 
         cmp_reg32_reg32(rs, rt);
         je_rj(12);
@@ -524,8 +524,8 @@ void genbne_test()
     }
     else if (rs_64bit == -1)
     {
-        int32_t rt1 = allocate_64_register1((uint32_t *)dst->f.i.rt);
-        int32_t rt2 = allocate_64_register2((uint32_t *)dst->f.i.rt);
+        int32_t rt1 = allocate_64_register1((uintptr_t)dst->f.i.rt);
+        int32_t rt2 = allocate_64_register2((uintptr_t)dst->f.i.rt);
 
         cmp_reg32_m32(rt1, (uint32_t *)dst->f.i.rs);
         jne_rj(20);
@@ -537,8 +537,8 @@ void genbne_test()
     }
     else if (rt_64bit == -1)
     {
-        int32_t rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-        int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
+        int32_t rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+        int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
 
         cmp_reg32_m32(rs1, (uint32_t *)dst->f.i.rt);
         jne_rj(20);
@@ -553,17 +553,17 @@ void genbne_test()
         int32_t rs1, rs2, rt1, rt2;
         if (!rs_64bit)
         {
-            rt1 = allocate_64_register1((uint32_t *)dst->f.i.rt);
-            rt2 = allocate_64_register2((uint32_t *)dst->f.i.rt);
-            rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-            rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
+            rt1 = allocate_64_register1((uintptr_t)dst->f.i.rt);
+            rt2 = allocate_64_register2((uintptr_t)dst->f.i.rt);
+            rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+            rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
         }
         else
         {
-            rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-            rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
-            rt1 = allocate_64_register1((uint32_t *)dst->f.i.rt);
-            rt2 = allocate_64_register2((uint32_t *)dst->f.i.rt);
+            rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+            rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
+            rt1 = allocate_64_register1((uintptr_t)dst->f.i.rt);
+            rt2 = allocate_64_register2((uintptr_t)dst->f.i.rt);
         }
         cmp_reg32_reg32(rs1, rt1);
         jne_rj(16);
@@ -631,11 +631,11 @@ void genbne_idle()
 
 void genblez_test()
 {
-    int32_t rs_64bit = is64((uint32_t *)dst->f.i.rs);
+    int32_t rs_64bit = is64((uintptr_t)dst->f.i.rs);
 
     if (!rs_64bit)
     {
-        int32_t rs = allocate_register((uint32_t *)dst->f.i.rs);
+        int32_t rs = allocate_register((uintptr_t)dst->f.i.rs);
 
         cmp_reg32_imm32(rs, 0);
         jg_rj(12);
@@ -656,8 +656,8 @@ void genblez_test()
     }
     else
     {
-        int32_t rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-        int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
+        int32_t rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+        int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
 
         cmp_reg32_imm32(rs2, 0);
         jg_rj(10);
@@ -726,11 +726,11 @@ void genblez_idle()
 
 void genbgtz_test()
 {
-    int32_t rs_64bit = is64((uint32_t *)dst->f.i.rs);
+    int32_t rs_64bit = is64((uintptr_t)dst->f.i.rs);
 
     if (!rs_64bit)
     {
-        int32_t rs = allocate_register((uint32_t *)dst->f.i.rs);
+        int32_t rs = allocate_register((uintptr_t)dst->f.i.rs);
 
         cmp_reg32_imm32(rs, 0);
         jle_rj(12);
@@ -751,8 +751,8 @@ void genbgtz_test()
     }
     else
     {
-        int32_t rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-        int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
+        int32_t rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+        int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
 
         cmp_reg32_imm32(rs2, 0);
         jl_rj(10);
@@ -824,8 +824,8 @@ void genaddi()
 #ifdef INTERPRET_ADDI
     gencallinterp((uintptr_t)ADDI, 0);
 #else
-    int32_t rs = allocate_register((uint32_t *)dst->f.i.rs);
-    int32_t rt = allocate_register_w((uint32_t *)dst->f.i.rt);
+    int32_t rs = allocate_register((uintptr_t)dst->f.i.rs);
+    int32_t rt = allocate_register_w((uintptr_t)dst->f.i.rt);
 
     mov_reg32_reg32(rt, rs);
     add_reg32_imm32(rt, (int32_t)dst->f.i.immediate);
@@ -837,8 +837,8 @@ void genaddiu()
 #ifdef INTERPRET_ADDIU
     gencallinterp((uintptr_t)ADDIU, 0);
 #else
-    int32_t rs = allocate_register((uint32_t *)dst->f.i.rs);
-    int32_t rt = allocate_register_w((uint32_t *)dst->f.i.rt);
+    int32_t rs = allocate_register((uintptr_t)dst->f.i.rs);
+    int32_t rt = allocate_register_w((uintptr_t)dst->f.i.rt);
 
     mov_reg32_reg32(rt, rs);
     add_reg32_imm32(rt, (int32_t)dst->f.i.immediate);
@@ -850,9 +850,9 @@ void genslti()
 #ifdef INTERPRET_SLTI
     gencallinterp((uintptr_t)SLTI, 0);
 #else
-    int32_t rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-    int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
-    int32_t rt = allocate_register_w((uint32_t *)dst->f.i.rt);
+    int32_t rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+    int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
+    int32_t rt = allocate_register_w((uintptr_t)dst->f.i.rt);
     int64_t imm = (int64_t)dst->f.i.immediate;
 
     cmp_reg32_imm32(rs2, (uint32_t)(imm >> 32));
@@ -871,9 +871,9 @@ void gensltiu()
 #ifdef INTERPRET_SLTIU
     gencallinterp((uintptr_t)SLTIU, 0);
 #else
-    int32_t rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-    int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
-    int32_t rt = allocate_register_w((uint32_t *)dst->f.i.rt);
+    int32_t rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+    int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
+    int32_t rt = allocate_register_w((uintptr_t)dst->f.i.rt);
     int64_t imm = (int64_t)dst->f.i.immediate;
 
     cmp_reg32_imm32(rs2, (uint32_t)(imm >> 32));
@@ -892,8 +892,8 @@ void genandi()
 #ifdef INTERPRET_ANDI
     gencallinterp((uintptr_t)ANDI, 0);
 #else
-    int32_t rs = allocate_register((uint32_t *)dst->f.i.rs);
-    int32_t rt = allocate_register_w((uint32_t *)dst->f.i.rt);
+    int32_t rs = allocate_register((uintptr_t)dst->f.i.rs);
+    int32_t rt = allocate_register_w((uintptr_t)dst->f.i.rt);
 
     mov_reg32_reg32(rt, rs);
     and_reg32_imm32(rt, (uint16_t)dst->f.i.immediate);
@@ -905,10 +905,10 @@ void genori()
 #ifdef INTERPRET_ORI
     gencallinterp((uintptr_t)ORI, 0);
 #else
-    int32_t rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-    int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
-    int32_t rt1 = allocate_64_register1_w((uint32_t *)dst->f.i.rt);
-    int32_t rt2 = allocate_64_register2_w((uint32_t *)dst->f.i.rt);
+    int32_t rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+    int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
+    int32_t rt1 = allocate_64_register1_w((uintptr_t)dst->f.i.rt);
+    int32_t rt2 = allocate_64_register2_w((uintptr_t)dst->f.i.rt);
 
     mov_reg32_reg32(rt1, rs1);
     mov_reg32_reg32(rt2, rs2);
@@ -921,10 +921,10 @@ void genxori()
 #ifdef INTERPRET_XORI
     gencallinterp((uintptr_t)XORI, 0);
 #else
-    int32_t rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-    int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
-    int32_t rt1 = allocate_64_register1_w((uint32_t *)dst->f.i.rt);
-    int32_t rt2 = allocate_64_register2_w((uint32_t *)dst->f.i.rt);
+    int32_t rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+    int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
+    int32_t rt1 = allocate_64_register1_w((uintptr_t)dst->f.i.rt);
+    int32_t rt2 = allocate_64_register2_w((uintptr_t)dst->f.i.rt);
 
     mov_reg32_reg32(rt1, rs1);
     mov_reg32_reg32(rt2, rs2);
@@ -937,7 +937,7 @@ void genlui()
 #ifdef INTERPRET_LUI
     gencallinterp((uintptr_t)LUI, 0);
 #else
-    int32_t rt = allocate_register_w((uint32_t *)dst->f.i.rt);
+    int32_t rt = allocate_register_w((uintptr_t)dst->f.i.rt);
 
     mov_reg32_imm32(rt, (uint32_t)dst->f.i.immediate << 16);
 #endif
@@ -1211,10 +1211,10 @@ void gendaddi()
 #ifdef INTERPRET_DADDI
     gencallinterp((uintptr_t)DADDI, 0);
 #else
-    int32_t rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-    int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
-    int32_t rt1 = allocate_64_register1_w((uint32_t *)dst->f.i.rt);
-    int32_t rt2 = allocate_64_register2_w((uint32_t *)dst->f.i.rt);
+    int32_t rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+    int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
+    int32_t rt1 = allocate_64_register1_w((uintptr_t)dst->f.i.rt);
+    int32_t rt2 = allocate_64_register2_w((uintptr_t)dst->f.i.rt);
 
     mov_reg32_reg32(rt1, rs1);
     mov_reg32_reg32(rt2, rs2);
@@ -1228,10 +1228,10 @@ void gendaddiu()
 #ifdef INTERPRET_DADDIU
     gencallinterp((uintptr_t)DADDIU, 0);
 #else
-    int32_t rs1 = allocate_64_register1((uint32_t *)dst->f.i.rs);
-    int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
-    int32_t rt1 = allocate_64_register1_w((uint32_t *)dst->f.i.rt);
-    int32_t rt2 = allocate_64_register2_w((uint32_t *)dst->f.i.rt);
+    int32_t rs1 = allocate_64_register1((uintptr_t)dst->f.i.rs);
+    int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
+    int32_t rt1 = allocate_64_register1_w((uintptr_t)dst->f.i.rt);
+    int32_t rt2 = allocate_64_register2_w((uintptr_t)dst->f.i.rt);
 
     mov_reg32_reg32(rt1, rs1);
     mov_reg32_reg32(rt2, rs2);
@@ -1286,7 +1286,7 @@ void genlb()
     xor_reg8_imm8(BL, 3);                                 // 3
     movsx_reg32_8preg32pimm32(EAX, EBX, (uintptr_t)rdram); // 7
 
-    set_register_state(EAX, (uint32_t *)dst->f.i.rt, 1);
+    set_register_state(EAX, (uintptr_t)dst->f.i.rt, 1);
 #endif
 }
 
@@ -1326,7 +1326,7 @@ void genlh()
     xor_reg8_imm8(BL, 2);                                  // 3
     movsx_reg32_16preg32pimm32(EAX, EBX, (uintptr_t)rdram); // 7
 
-    set_register_state(EAX, (uint32_t *)dst->f.i.rt, 1);
+    set_register_state(EAX, (uintptr_t)dst->f.i.rt, 1);
 #endif
 }
 
@@ -1370,7 +1370,7 @@ void genlw()
     and_reg32_imm32(EBX, 0x7FFFFF);                    // 6
     mov_reg32_preg32pimm32(EAX, EBX, (uintptr_t)rdram); // 6
 
-    set_register_state(EAX, (uint32_t *)dst->f.i.rt, 1);
+    set_register_state(EAX, (uintptr_t)dst->f.i.rt, 1);
 #endif
 }
 
@@ -1412,7 +1412,7 @@ void genlbu()
 
     and_eax_imm32(0xFF);
 
-    set_register_state(EAX, (uint32_t *)dst->f.i.rt, 1);
+    set_register_state(EAX, (uintptr_t)dst->f.i.rt, 1);
 #endif
 }
 
@@ -1454,7 +1454,7 @@ void genlhu()
 
     and_eax_imm32(0xFFFF);
 
-    set_register_state(EAX, (uint32_t *)dst->f.i.rt, 1);
+    set_register_state(EAX, (uintptr_t)dst->f.i.rt, 1);
 #endif
 }
 

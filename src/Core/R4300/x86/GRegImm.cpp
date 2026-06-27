@@ -15,11 +15,11 @@
 
 void genbltz_test()
 {
-    int32_t rs_64bit = is64((uint32_t *)dst->f.i.rs);
+    int32_t rs_64bit = is64((uintptr_t)dst->f.i.rs);
 
     if (!rs_64bit)
     {
-        int32_t rs = allocate_register((uint32_t *)dst->f.i.rs);
+        int32_t rs = allocate_register((uintptr_t)dst->f.i.rs);
 
         cmp_reg32_imm32(rs, 0);
         jge_rj(12);
@@ -37,7 +37,7 @@ void genbltz_test()
     }
     else
     {
-        int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
+        int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
 
         cmp_reg32_imm32(rs2, 0);
         jge_rj(12);
@@ -103,11 +103,11 @@ void genbltz_idle()
 
 void genbgez_test()
 {
-    int32_t rs_64bit = is64((uint32_t *)dst->f.i.rs);
+    int32_t rs_64bit = is64((uintptr_t)dst->f.i.rs);
 
     if (!rs_64bit)
     {
-        int32_t rs = allocate_register((uint32_t *)dst->f.i.rs);
+        int32_t rs = allocate_register((uintptr_t)dst->f.i.rs);
 
         cmp_reg32_imm32(rs, 0);
         jl_rj(12);
@@ -125,7 +125,7 @@ void genbgez_test()
     }
     else
     {
-        int32_t rs2 = allocate_64_register2((uint32_t *)dst->f.i.rs);
+        int32_t rs2 = allocate_64_register2((uintptr_t)dst->f.i.rs);
 
         cmp_reg32_imm32(rs2, 0);
         jl_rj(12);
@@ -299,11 +299,11 @@ void genbgezl_idle()
 
 void genbranchlink()
 {
-    int32_t r31_64bit = is64((uint32_t *)&reg[31]);
+    int32_t r31_64bit = is64((uintptr_t)&reg[31]);
 
     if (!r31_64bit)
     {
-        int32_t r31 = allocate_register_w((uint32_t *)&reg[31]);
+        int32_t r31 = allocate_register_w((uintptr_t)&reg[31]);
 
         mov_reg32_imm32(r31, dst->addr + 8);
     }
@@ -317,8 +317,8 @@ void genbranchlink()
     }
     else
     {
-        int32_t r311 = allocate_64_register1_w((uint32_t *)&reg[31]);
-        int32_t r312 = allocate_64_register2_w((uint32_t *)&reg[31]);
+        int32_t r311 = allocate_64_register1_w((uintptr_t)&reg[31]);
+        int32_t r312 = allocate_64_register2_w((uintptr_t)&reg[31]);
 
         mov_reg32_imm32(r311, dst->addr + 8);
         if (dst->addr & 0x80000000)
