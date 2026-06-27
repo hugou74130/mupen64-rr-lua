@@ -65,14 +65,14 @@ void free_register(int32_t reg)
     while (last <= dst)
     {
         if (last_access[reg] != NULL && dirty[reg])
-            last->reg_cache_infos.needed_registers[reg] = reg_content[reg];
+            last->reg_cache_infos.needed_registers[reg] = (void*)reg_content[reg];
         else
             last->reg_cache_infos.needed_registers[reg] = NULL;
 
         if (last_access[reg] != NULL && r64[reg] != -1)
         {
             if (dirty[r64[reg]])
-                last->reg_cache_infos.needed_registers[r64[reg]] = reg_content[r64[reg]];
+                last->reg_cache_infos.needed_registers[r64[reg]] = (void*)reg_content[r64[reg]];
             else
                 last->reg_cache_infos.needed_registers[r64[reg]] = NULL;
         }
@@ -87,14 +87,14 @@ void free_register(int32_t reg)
 
     if (dirty[reg])
     {
-        mov_m32_reg32(reg_content[reg], reg);
+        mov_m32_reg32((void*)reg_content[reg], reg);
         if (r64[reg] == -1)
         {
             sar_reg32_imm8(reg, 31);
-            mov_m32_reg32((uint32_t *)reg_content[reg] + 1, reg);
+            mov_m32_reg32((void*)((uint32_t *)(uintptr_t)reg_content[reg] + 1), reg);
         }
         else
-            mov_m32_reg32(reg_content[r64[reg]], r64[reg]);
+            mov_m32_reg32((void*)reg_content[r64[reg]], r64[reg]);
     }
     last_access[reg] = NULL;
     free_since[reg] = dst + 1;
@@ -107,7 +107,7 @@ void free_register(int32_t reg)
 
 int32_t lru_register()
 {
-    uintptr_t oldest_access = 0xFFFFFFFFFFFFFFFF;
+    uintptr_t oldest_access = static_cast<uintptr_t>(-1);
     int32_t i, reg = 0;
     for (i = 0; i < 8; i++)
     {
@@ -122,7 +122,7 @@ int32_t lru_register()
 
 int32_t lru_register_exc1(int32_t exc1)
 {
-    uintptr_t oldest_access = 0xFFFFFFFFFFFFFFFF;
+    uintptr_t oldest_access = static_cast<uintptr_t>(-1);
     int32_t i, reg = 0;
     for (i = 0; i < 8; i++)
     {
@@ -155,7 +155,7 @@ int32_t allocate_register(uintptr_t addr)
 
                 while (last <= dst)
                 {
-                    last->reg_cache_infos.needed_registers[i] = reg_content[i];
+                    last->reg_cache_infos.needed_registers[i] = (void*)reg_content[i];
                     last++;
                 }
                 last_access[i] = dst;
@@ -165,7 +165,7 @@ int32_t allocate_register(uintptr_t addr)
 
                     while (last <= dst)
                     {
-                        last->reg_cache_infos.needed_registers[r64[i]] = reg_content[r64[i]];
+                        last->reg_cache_infos.needed_registers[r64[i]] = (void*)reg_content[r64[i]];
                         last++;
                     }
                     last_access[r64[i]] = dst;
@@ -207,7 +207,7 @@ int32_t allocate_register(uintptr_t addr)
         if (addr == r0 || addr == r0 + 1)
             xor_reg32_reg32(reg, reg);
         else
-            mov_reg32_m32(reg, addr);
+            mov_reg32_m32(reg, (void*)addr);
     }
 
     return reg;
@@ -527,12 +527,12 @@ void force_32(int32_t reg)
         while (last <= dst)
         {
             if (dirty[reg])
-                last->reg_cache_infos.needed_registers[reg] = reg_content[reg];
+                last->reg_cache_infos.needed_registers[reg] = (void*)reg_content[reg];
             else
                 last->reg_cache_infos.needed_registers[reg] = NULL;
 
             if (dirty[r64[reg]])
-                last->reg_cache_infos.needed_registers[r64[reg]] = reg_content[r64[reg]];
+                last->reg_cache_infos.needed_registers[r64[reg]] = (void*)reg_content[r64[reg]];
             else
                 last->reg_cache_infos.needed_registers[r64[reg]] = NULL;
 
@@ -541,8 +541,8 @@ void force_32(int32_t reg)
 
         if (dirty[reg])
         {
-            mov_m32_reg32(reg_content[reg], reg);
-            mov_m32_reg32(reg_content[r64[reg]], r64[reg]);
+            mov_m32_reg32((void*)reg_content[reg], reg);
+            mov_m32_reg32((void*)reg_content[r64[reg]], r64[reg]);
             dirty[reg] = 0;
         }
         last_access[r64[reg]] = NULL;
@@ -561,7 +561,7 @@ void allocate_register_manually(int32_t reg, uintptr_t addr)
 
         while (last <= dst)
         {
-            last->reg_cache_infos.needed_registers[reg] = reg_content[reg];
+            last->reg_cache_infos.needed_registers[reg] = (void*)reg_content[reg];
             last++;
         }
         last_access[reg] = dst;
@@ -571,7 +571,7 @@ void allocate_register_manually(int32_t reg, uintptr_t addr)
 
             while (last <= dst)
             {
-                last->reg_cache_infos.needed_registers[r64[reg]] = reg_content[r64[reg]];
+                last->reg_cache_infos.needed_registers[r64[reg]] = (void*)reg_content[r64[reg]];
                 last++;
             }
             last_access[r64[reg]] = dst;
@@ -599,7 +599,7 @@ void allocate_register_manually(int32_t reg, uintptr_t addr)
 
             while (last <= dst)
             {
-                last->reg_cache_infos.needed_registers[i] = reg_content[i];
+                last->reg_cache_infos.needed_registers[i] = (void*)reg_content[i];
                 last++;
             }
             last_access[i] = dst;
@@ -609,7 +609,7 @@ void allocate_register_manually(int32_t reg, uintptr_t addr)
 
                 while (last <= dst)
                 {
-                    last->reg_cache_infos.needed_registers[r64[i]] = reg_content[r64[i]];
+                    last->reg_cache_infos.needed_registers[r64[i]] = (void*)reg_content[r64[i]];
                     last++;
                 }
                 last_access[r64[i]] = dst;
@@ -638,7 +638,7 @@ void allocate_register_manually(int32_t reg, uintptr_t addr)
         if (addr == r0 || addr == r0 + 1)
             xor_reg32_reg32(reg, reg);
         else
-            mov_reg32_m32(reg, addr);
+            mov_reg32_m32(reg, (void*)addr);
     }
 }
 
@@ -652,7 +652,7 @@ void allocate_register_manually_w(int32_t reg, uintptr_t addr, int32_t load)
 
         while (last <= dst)
         {
-            last->reg_cache_infos.needed_registers[reg] = reg_content[reg];
+            last->reg_cache_infos.needed_registers[reg] = (void*)reg_content[reg];
             last++;
         }
         last_access[reg] = dst;
@@ -663,7 +663,7 @@ void allocate_register_manually_w(int32_t reg, uintptr_t addr, int32_t load)
 
             while (last <= dst)
             {
-                last->reg_cache_infos.needed_registers[r64[reg]] = reg_content[r64[reg]];
+                last->reg_cache_infos.needed_registers[r64[reg]] = (void*)reg_content[r64[reg]];
                 last++;
             }
             last_access[r64[reg]] = NULL;
@@ -694,7 +694,7 @@ void allocate_register_manually_w(int32_t reg, uintptr_t addr, int32_t load)
 
             while (last <= dst)
             {
-                last->reg_cache_infos.needed_registers[i] = reg_content[i];
+                last->reg_cache_infos.needed_registers[i] = (void*)reg_content[i];
                 last++;
             }
             last_access[i] = dst;
@@ -733,7 +733,7 @@ void allocate_register_manually_w(int32_t reg, uintptr_t addr, int32_t load)
         if (addr == r0 || addr == r0 + 1)
             xor_reg32_reg32(reg, reg);
         else
-            mov_reg32_m32(reg, addr);
+            mov_reg32_m32(reg, (void*)addr);
     }
 }
 
