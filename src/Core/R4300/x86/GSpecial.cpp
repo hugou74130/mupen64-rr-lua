@@ -502,8 +502,8 @@ void genmult()
     gencallinterp((uintptr_t)MULT, 0);
 #else
     int32_t rs, rt;
-    allocate_register_manually_w(EAX, (uint32_t *)&lo, 0);
-    allocate_register_manually_w(EDX, (uint32_t *)&hi, 0);
+    allocate_register_manually_w(EAX, (uintptr_t)&lo, 0);
+    allocate_register_manually_w(EDX, (uintptr_t)&hi, 0);
     rs = allocate_register((uintptr_t)dst->f.r.rs);
     rt = allocate_register((uintptr_t)dst->f.r.rt);
     mov_reg32_reg32(EAX, rs);
@@ -517,8 +517,8 @@ void genmultu()
     gencallinterp((uintptr_t)MULTU, 0);
 #else
     int32_t rs, rt;
-    allocate_register_manually_w(EAX, (uint32_t *)&lo, 0);
-    allocate_register_manually_w(EDX, (uint32_t *)&hi, 0);
+    allocate_register_manually_w(EAX, (uintptr_t)&lo, 0);
+    allocate_register_manually_w(EDX, (uintptr_t)&hi, 0);
     rs = allocate_register((uintptr_t)dst->f.r.rs);
     rt = allocate_register((uintptr_t)dst->f.r.rt);
     mov_reg32_reg32(EAX, rs);
@@ -532,8 +532,8 @@ void gendiv()
     gencallinterp((uintptr_t)DIV, 0);
 #else
     int32_t rs, rt;
-    allocate_register_manually_w(EAX, (uint32_t *)&lo, 0);
-    allocate_register_manually_w(EDX, (uint32_t *)&hi, 0);
+    allocate_register_manually_w(EAX, (uintptr_t)&lo, 0);
+    allocate_register_manually_w(EDX, (uintptr_t)&hi, 0);
     rs = allocate_register((uintptr_t)dst->f.r.rs);
     rt = allocate_register((uintptr_t)dst->f.r.rt);
     cmp_reg32_imm32(rt, 0);
@@ -550,8 +550,8 @@ void gendivu()
     gencallinterp((uintptr_t)DIVU, 0);
 #else
     int32_t rs, rt;
-    allocate_register_manually_w(EAX, (uint32_t *)&lo, 0);
-    allocate_register_manually_w(EDX, (uint32_t *)&hi, 0);
+    allocate_register_manually_w(EAX, (uintptr_t)&lo, 0);
+    allocate_register_manually_w(EDX, (uintptr_t)&hi, 0);
     rs = allocate_register((uintptr_t)dst->f.r.rs);
     rt = allocate_register((uintptr_t)dst->f.r.rt);
     cmp_reg32_imm32(rt, 0);

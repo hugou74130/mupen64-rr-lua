@@ -1500,7 +1500,7 @@ void genlwu()
 
     xor_reg32_reg32(EBX, EBX);
 
-    set_64_register_state(EAX, EBX, (uint32_t *)dst->f.i.rt, 1);
+    set_64_register_state(EAX, EBX, (uintptr_t)dst->f.i.rt, 1);
 #endif
 }
 
@@ -1845,7 +1845,7 @@ void genld()
     mov_reg32_preg32pimm32(EAX, EBX, ((uintptr_t)rdram) + 4); // 6
     mov_reg32_preg32pimm32(ECX, EBX, ((uintptr_t)rdram));     // 6
 
-    set_64_register_state(EAX, ECX, (uint32_t *)dst->f.i.rt, 1);
+    set_64_register_state(EAX, ECX, (uintptr_t)dst->f.i.rt, 1);
 #endif
 }
 
