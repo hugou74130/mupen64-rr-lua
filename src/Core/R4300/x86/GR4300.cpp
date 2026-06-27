@@ -1935,7 +1935,7 @@ void gensdc1()
     mov_m32_imm32((void *)(&PC), (uintptr_t)(dst + 1));       // 10
     mov_m32_reg32((void *)(&address), EBX);              // 6
     mov_m32_reg32((void *)(&dword), ECX);                // 6
-    mov_m32_reg32((void *)(&dword) + 1, EDX);            // 6
+    mov_m32_reg32((uint32_t *)(&dword) + 1, EDX);        // 6
     shr_reg32_imm8(EBX, 16);                                 // 3
     mov_reg32_preg32x4pimm32(EBX, EBX, (uintptr_t)writememd); // 7
     call_reg32(EBX);                                         // 2
@@ -1995,7 +1995,7 @@ void gensd()
     mov_m32_imm32((void *)(&PC), (uintptr_t)(dst + 1));       // 10
     mov_m32_reg32((void *)(&address), EBX);              // 6
     mov_m32_reg32((void *)(&dword), ECX);                // 6
-    mov_m32_reg32((void *)(&dword) + 1, EDX);            // 6
+    mov_m32_reg32((uint32_t *)(&dword) + 1, EDX);        // 6
     shr_reg32_imm8(EBX, 16);                                 // 3
     mov_reg32_preg32x4pimm32(EBX, EBX, (uintptr_t)writememd); // 7
     call_reg32(EBX);                                         // 2
