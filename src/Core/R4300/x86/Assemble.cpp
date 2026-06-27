@@ -56,7 +56,8 @@ static void add_jump(uint32_t pc_addr, uint32_t mi_addr)
 
 void passe2(precomp_instr *dest, int32_t start, int32_t end, precomp_block *block)
 {
-    uint32_t i, real_code_length, addr_dest;
+    uint32_t i, real_code_length;
+    uintptr_t addr_dest;
     build_wrappers(dest, start, end, block);
     real_code_length = code_length;
 
@@ -65,13 +66,13 @@ void passe2(precomp_instr *dest, int32_t start, int32_t end, precomp_block *bloc
         code_length = jumps_table[i].pc_addr;
         if (dest[(jumps_table[i].mi_addr - dest[0].addr) / 4].reg_cache_infos.need_map)
         {
-            addr_dest = (uint32_t)dest[(jumps_table[i].mi_addr - dest[0].addr) / 4].reg_cache_infos.jump_wrapper;
-            put32(addr_dest - ((uint32_t)block->code + code_length) - 4);
+            addr_dest = (uintptr_t)dest[(jumps_table[i].mi_addr - dest[0].addr) / 4].reg_cache_infos.jump_wrapper;
+            put64(addr_dest - ((uintptr_t)block->code + code_length) - 4);
         }
         else
         {
-            addr_dest = dest[(jumps_table[i].mi_addr - dest[0].addr) / 4].local_addr;
-            put32(addr_dest - code_length - 4);
+            addr_dest = (uintptr_t)dest[(jumps_table[i].mi_addr - dest[0].addr) / 4].local_addr;
+            put64(addr_dest - code_length - 4);
         }
     }
     code_length = real_code_length;
@@ -103,6 +104,17 @@ inline void put32(uint32_t dword)
     code_length += 4;
 }
 
+inline void put64(uint64_t qword)
+{
+    if ((code_length + 8) >= max_code_length)
+    {
+        max_code_length += JUMP_TABLE_SIZE;
+        *inst_pointer = (unsigned char *)realloc_exec(*inst_pointer, code_length, max_code_length);
+    }
+    *((uint64_t *)(&(*inst_pointer)[code_length])) = qword;
+    code_length += 8;
+}
+
 inline void put16(uint16_t word)
 {
     if ((code_length + 2) >= max_code_length)
@@ -126,49 +138,47 @@ void pop_reg32(int32_t reg32)
 
 void mov_eax_memoffs32(void *_memoffs32)
 {
-    uint32_t *memoffs32 = (uint32_t *)_memoffs32;
     put8(0xA1);
-    put32((uint32_t)(memoffs32));
+    put64((uintptr_t)(_memoffs32));
 }
 
 void mov_memoffs32_eax(void *_memoffs32)
 {
-    uint32_t *memoffs32 = (uint32_t *)_memoffs32;
     put8(0xA3);
-    put32((uint32_t)(memoffs32));
+    put64((uintptr_t)(_memoffs32));
 }
 
 void mov_ax_memoffs16(uint16_t *memoffs16)
 {
     put8(0x66);
     put8(0xA1);
-    put32((uint32_t)(memoffs16));
+    put64((uintptr_t)(memoffs16));
 }
 
 void mov_memoffs16_ax(uint16_t *memoffs16)
 {
     put8(0x66);
     put8(0xA3);
-    put32((uint32_t)(memoffs16));
+    put64((uintptr_t)(memoffs16));
 }
 
 void mov_al_memoffs8(unsigned char *memoffs8)
 {
     put8(0xA0);
-    put32((uint32_t)(memoffs8));
+    put64((uintptr_t)(memoffs8));
 }
 
 void mov_memoffs8_al(unsigned char *memoffs8)
 {
     put8(0xA2);
-    put32((uint32_t)(memoffs8));
+    put64((uintptr_t)(memoffs8));
 }
 
 void mov_m8_imm8(unsigned char *m8, unsigned char imm8)
 {
     put8(0xC6);
     put8(0x05);
-    put32((uint32_t)(m8));
+    put64((uintptr_t)(m8));
     put8(imm8);
 }
 
@@ -176,7 +186,7 @@ void mov_m8_reg8(unsigned char *m8, int32_t reg8)
 {
     put8(0x88);
     put8((reg8 << 3) | 5);
-    put32((uint32_t)(m8));
+    put64((uintptr_t)(m8));
 }
 
 void mov_reg16_m16(int32_t reg16, uint16_t *m16)
@@ -184,7 +194,7 @@ void mov_reg16_m16(int32_t reg16, uint16_t *m16)
     put8(0x66);
     put8(0x8B);
     put8((reg16 << 3) | 5);
-    put32((uint32_t)(m16));
+    put64((uintptr_t)(m16));
 }
 
 void mov_m16_reg16(uint16_t *m16, int32_t reg16)
@@ -192,15 +202,14 @@ void mov_m16_reg16(uint16_t *m16, int32_t reg16)
     put8(0x66);
     put8(0x89);
     put8((reg16 << 3) | 5);
-    put32((uint32_t)(m16));
+    put64((uintptr_t)(m16));
 }
 
 void cmp_reg32_m32(int32_t reg32, void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x3B);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void cmp_reg32_reg32(int32_t reg1, int32_t reg2)
@@ -240,10 +249,9 @@ void test_reg32_imm32(int32_t reg32, uint32_t imm32)
 
 void test_m32_imm32(void *_m32, uint32_t imm32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0xF7);
     put8(0x05);
-    put32((uint32_t)m32);
+    put64((uintptr_t)(_m32));
     put32(imm32);
 }
 
@@ -261,18 +269,16 @@ void cmp_al_imm8(unsigned char imm8)
 
 void add_m32_reg32(void *_m32, int32_t reg32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x01);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void sub_reg32_m32(int32_t reg32, void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x2B);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void sub_reg32_reg32(int32_t reg1, int32_t reg2)
@@ -479,27 +485,24 @@ void inc_reg32(int32_t reg32)
 
 void or_m32_imm32(void *_m32, uint32_t imm32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x81);
     put8(0x0D);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
     put32(imm32);
 }
 
 void or_m32_reg32(void *_m32, uint32_t reg32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x09);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void or_reg32_m32(uint32_t reg32, void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x0B);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void or_reg32_reg32(uint32_t reg1, uint32_t reg2)
@@ -516,19 +519,17 @@ void and_reg32_reg32(uint32_t reg1, uint32_t reg2)
 
 void and_m32_imm32(void *_m32, uint32_t imm32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x81);
     put8(0x25);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
     put32(imm32);
 }
 
 void and_reg32_m32(uint32_t reg32, void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x23);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void xor_reg32_reg32(uint32_t reg1, uint32_t reg2)
@@ -539,36 +540,32 @@ void xor_reg32_reg32(uint32_t reg1, uint32_t reg2)
 
 void xor_reg32_m32(uint32_t reg32, void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x33);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void add_m32_imm32(void *_m32, uint32_t imm32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x81);
     put8(0x05);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
     put32(imm32);
 }
 
 void add_m32_imm8(void *_m32, unsigned char imm8)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x83);
     put8(0x05);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
     put8(imm8);
 }
 
 void sub_m32_imm32(void *_m32, uint32_t imm32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x81);
     put8(0x2D);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
     put32(imm32);
 }
 
@@ -594,27 +591,24 @@ void add_reg32_imm32(uint32_t reg32, uint32_t imm32)
 
 void inc_m32(void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0xFF);
     put8(0x05);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void cmp_m32_imm32(void *_m32, uint32_t imm32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x81);
     put8(0x3D);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
     put32(imm32);
 }
 
 void cmp_m32_imm8(void *_m32, unsigned char imm8)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x83);
     put8(0x3D);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
     put8(imm8);
 }
 
@@ -622,7 +616,7 @@ void cmp_m8_imm8(unsigned char *m8, unsigned char imm8)
 {
     put8(0x80);
     put8(0x3D);
-    put32((uint32_t)(m8));
+    put64((uintptr_t)(m8));
     put8(imm8);
 }
 
@@ -634,10 +628,9 @@ void cmp_eax_imm32(uint32_t imm32)
 
 void mov_m32_imm32(void *_m32, uint32_t imm32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0xC7);
     put8(0x05);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
     put32(imm32);
 }
 
@@ -666,10 +659,9 @@ void cbw()
 
 void mov_m32_reg32(void *_m32, uint32_t reg32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x89);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void ret()
@@ -685,10 +677,9 @@ void call_reg32(uint32_t reg32)
 
 void call_m32(void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0xFF);
     put8(0x15);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void shr_reg32_imm8(uint32_t reg32, unsigned char imm8)
@@ -755,18 +746,16 @@ void shrd_reg32_reg32_imm8(uint32_t reg1, uint32_t reg2, unsigned char imm8)
 
 void mul_m32(void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0xF7);
     put8(0x25);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void imul_m32(void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0xF7);
     put8(0x2D);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void imul_reg32(uint32_t reg32)
@@ -795,18 +784,16 @@ void div_reg32(uint32_t reg32)
 
 void idiv_m32(void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0xF7);
     put8(0x3D);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void div_m32(void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0xF7);
     put8(0x35);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void add_reg32_reg32(uint32_t reg1, uint32_t reg2)
@@ -823,18 +810,16 @@ void adc_reg32_reg32(uint32_t reg1, uint32_t reg2)
 
 void add_reg32_m32(uint32_t reg32, void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x03);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void adc_reg32_m32(uint32_t reg32, void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x13);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void adc_reg32_imm32(uint32_t reg32, uint32_t imm32)
@@ -852,10 +837,9 @@ void jmp_reg32(uint32_t reg32)
 
 void jmp_m32(void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0xFF);
     put8(0x25);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void mov_reg32_preg32(uint32_t reg1, uint32_t reg2)
@@ -961,17 +945,16 @@ void shl_reg32_imm8(uint32_t reg32, unsigned char imm8)
 
 void mov_reg32_m32(uint32_t reg32, void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0x8B);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void mov_reg8_m8(int32_t reg8, unsigned char *m8)
 {
     put8(0x8A);
     put8((reg8 << 3) | 5);
-    put32((uint32_t)(m8));
+    put64((uintptr_t)(m8));
 }
 
 void and_eax_imm32(uint32_t imm32)
@@ -1077,7 +1060,7 @@ void movsx_reg32_m8(int32_t reg32, unsigned char *m8)
     put8(0x0F);
     put8(0xBE);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m8));
+    put64((uintptr_t)(m8));
 }
 
 void movsx_reg32_reg8(int32_t reg32, int32_t reg8)
@@ -1115,14 +1098,14 @@ void movsx_reg32_m16(int32_t reg32, uint16_t *m16)
     put8(0x0F);
     put8(0xBF);
     put8((reg32 << 3) | 5);
-    put32((uint32_t)(m16));
+    put64((uintptr_t)(m16));
 }
 
 void fldcw_m16(uint16_t *m16)
 {
     put8(0xD9);
     put8(0x2D);
-    put32((uint32_t)(m16));
+    put64((uintptr_t)(m16));
 }
 
 void fld_fpreg(int32_t fpreg)
@@ -1205,10 +1188,9 @@ void fistp_preg32_dword(int32_t reg32)
 
 void fistp_m32(void *_m32)
 {
-    uint32_t *m32 = (uint32_t *)_m32;
     put8(0xDB);
     put8(0x1D);
-    put32((uint32_t)(m32));
+    put64((uintptr_t)(_m32));
 }
 
 void fistp_preg32_qword(int32_t reg32)
@@ -1221,7 +1203,7 @@ void fistp_m64(uint64_t *m64)
 {
     put8(0xDF);
     put8(0x3D);
-    put32((uint32_t)(m64));
+    put64((uintptr_t)(m64));
 }
 
 void fld_preg32_qword(int32_t reg32)

@@ -37,7 +37,7 @@ typedef struct _reg_cache_struct
 {
     int32_t need_map;
     void *needed_registers[8];
-    unsigned char jump_wrapper[62];
+    unsigned char jump_wrapper[256];
     int32_t need_cop1_check;
 } reg_cache_struct;
 
@@ -47,6 +47,7 @@ void debug();
 
 void put8(unsigned char octet);
 extern void put32(uint32_t dword);
+extern void put64(uint64_t qword);
 void put16(uint16_t word);
 
 void push_reg32(int32_t reg32);

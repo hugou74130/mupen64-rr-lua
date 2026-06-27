@@ -10,12 +10,12 @@
 #include <R4300/Recomp.hpp>
 #include <R4300/Recomph.hpp>
 
-static uint32_t *reg_content[8];
+static uintptr_t reg_content[8];
 static precomp_instr *last_access[8];
 static precomp_instr *free_since[8];
 static int32_t dirty[8];
 static int32_t r64[8];
-static uint32_t *r0;
+static uintptr_t r0;
 
 void init_cache(precomp_instr *start)
 {
@@ -25,7 +25,7 @@ void init_cache(precomp_instr *start)
         last_access[i] = NULL;
         free_since[i] = start;
     }
-    r0 = (uint32_t *)reg;
+    r0 = (uintptr_t)reg;
 }
 
 void free_all_registers()
@@ -51,7 +51,7 @@ void free_register(int32_t reg)
 {
     precomp_instr *last;
 
-    if (last_access[reg] != NULL && r64[reg] != -1 && (int32_t)reg_content[reg] != (int32_t)reg_content[r64[reg]] - 4)
+    if (last_access[reg] != NULL && r64[reg] != -1 && (uintptr_t)reg_content[reg] != (uintptr_t)reg_content[r64[reg]] - 4)
     {
         free_register(r64[reg]);
         return;
@@ -107,13 +107,13 @@ void free_register(int32_t reg)
 
 int32_t lru_register()
 {
-    uint32_t oldest_access = 0xFFFFFFFF;
+    uintptr_t oldest_access = 0xFFFFFFFFFFFFFFFF;
     int32_t i, reg = 0;
     for (i = 0; i < 8; i++)
     {
-        if (i != ESP && (uint32_t)last_access[i] < oldest_access)
+        if (i != ESP && (uintptr_t)last_access[i] < oldest_access)
         {
-            oldest_access = (int32_t)last_access[i];
+            oldest_access = (uintptr_t)last_access[i];
             reg = i;
         }
     }
@@ -122,13 +122,13 @@ int32_t lru_register()
 
 int32_t lru_register_exc1(int32_t exc1)
 {
-    uint32_t oldest_access = 0xFFFFFFFF;
+    uintptr_t oldest_access = 0xFFFFFFFFFFFFFFFF;
     int32_t i, reg = 0;
     for (i = 0; i < 8; i++)
     {
-        if (i != ESP && i != exc1 && (uint32_t)last_access[i] < oldest_access)
+        if (i != ESP && i != exc1 && (uintptr_t)last_access[i] < oldest_access)
         {
-            oldest_access = (int32_t)last_access[i];
+            oldest_access = (uintptr_t)last_access[i];
             reg = i;
         }
     }
@@ -139,17 +139,17 @@ int32_t lru_register_exc1(int32_t exc1)
 // if there was another value before it's cleanly removed of the
 // register cache. After that, the register number is returned.
 // If data are already cached, the function only returns the register number
-int32_t allocate_register(uint32_t *addr)
+int32_t allocate_register(uintptr_t addr)
 {
-    uint32_t oldest_access = 0xFFFFFFFF;
+    uintptr_t oldest_access = UINTPTR_MAX;
     int32_t reg = 0, i;
 
     // is it already cached ?
-    if (addr != NULL)
+    if (addr != 0)
     {
         for (i = 0; i < 8; i++)
         {
-            if (last_access[i] != NULL && reg_content[i] == addr)
+            if (last_access[i] != NULL && (uintptr_t)reg_content[i] == addr)
             {
                 precomp_instr *last = last_access[i] + 1;
 
@@ -179,9 +179,9 @@ int32_t allocate_register(uint32_t *addr)
     // if it's not cached, we take the least recently used register
     for (i = 0; i < 8; i++)
     {
-        if (i != ESP && (uint32_t)last_access[i] < oldest_access)
+        if (i != ESP && (uintptr_t)last_access[i] < oldest_access)
         {
-            oldest_access = (int32_t)last_access[i];
+            oldest_access = (uintptr_t)last_access[i];
             reg = i;
         }
     }
@@ -202,7 +202,7 @@ int32_t allocate_register(uint32_t *addr)
     dirty[reg] = 0;
     r64[reg] = -1;
 
-    if (addr != NULL)
+    if (addr != 0)
     {
         if (addr == r0 || addr == r0 + 1)
             xor_reg32_reg32(reg, reg);
@@ -215,7 +215,7 @@ int32_t allocate_register(uint32_t *addr)
 
 // this function is similar to allocate_register except it loads
 // a 64 bits value, and return the register number of the LSB part
-int32_t allocate_64_register1(uint32_t *addr)
+int32_t allocate_64_register1(uintptr_t addr)
 {
     int32_t reg1, reg2, i;
 
@@ -227,7 +227,7 @@ int32_t allocate_64_register1(uint32_t *addr)
             if (r64[i] == -1)
             {
                 allocate_register(addr);
-                reg2 = allocate_register(dirty[i] ? NULL : addr + 1);
+                reg2 = allocate_register(dirty[i] ? 0 : addr + 1);
                 r64[i] = reg2;
                 r64[reg2] = i;
 
@@ -254,7 +254,7 @@ int32_t allocate_64_register1(uint32_t *addr)
 
 // this function is similar to allocate_register except it loads
 // a 64 bits value, and return the register number of the MSB part
-int32_t allocate_64_register2(uint32_t *addr)
+int32_t allocate_64_register2(uintptr_t addr)
 {
     int32_t reg1, reg2, i;
 
@@ -266,7 +266,7 @@ int32_t allocate_64_register2(uint32_t *addr)
             if (r64[i] == -1)
             {
                 allocate_register(addr);
-                reg2 = allocate_register(dirty[i] ? NULL : addr + 1);
+                reg2 = allocate_register(dirty[i] ? 0 : addr + 1);
                 r64[i] = reg2;
                 r64[reg2] = i;
 
@@ -295,7 +295,7 @@ int32_t allocate_64_register2(uint32_t *addr)
 // and then, it returns 1  if it's a 64 bit value
 //                      0  if it's a 32 bit value
 //                      -1 if it's not cached
-int32_t is64(uint32_t *addr)
+int32_t is64(uintptr_t addr)
 {
     int32_t i;
     for (i = 0; i < 8; i++)
@@ -309,9 +309,9 @@ int32_t is64(uint32_t *addr)
     return -1;
 }
 
-int32_t allocate_register_w(uint32_t *addr)
+int32_t allocate_register_w(uintptr_t addr)
 {
-    uint32_t oldest_access = 0xFFFFFFFF;
+    uintptr_t oldest_access = UINTPTR_MAX;
     int32_t reg = 0, i;
 
     // is it already cached ?
@@ -323,7 +323,7 @@ int32_t allocate_register_w(uint32_t *addr)
 
             while (last <= dst)
             {
-                last->reg_cache_infos.needed_registers[i] = NULL;
+                last->reg_cache_infos.needed_registers;
                 last++;
             }
             last_access[i] = dst;
@@ -348,9 +348,9 @@ int32_t allocate_register_w(uint32_t *addr)
     // if it's not cached, we take the least recently used register
     for (i = 0; i < 8; i++)
     {
-        if (i != ESP && (uint32_t)last_access[i] < oldest_access)
+        if (i != ESP && (uintptr_t)last_access[i] < oldest_access)
         {
-            oldest_access = (int32_t)last_access[i];
+            oldest_access = (uintptr_t)last_access[i];
             reg = i;
         }
     }
@@ -374,7 +374,7 @@ int32_t allocate_register_w(uint32_t *addr)
     return reg;
 }
 
-int32_t allocate_64_register1_w(uint32_t *addr)
+int32_t allocate_64_register1_w(uintptr_t addr)
 {
     int32_t reg1, reg2, i;
 
@@ -430,7 +430,7 @@ int32_t allocate_64_register1_w(uint32_t *addr)
     return reg1;
 }
 
-int32_t allocate_64_register2_w(uint32_t *addr)
+int32_t allocate_64_register2_w(uintptr_t addr)
 {
     int32_t reg1, reg2, i;
 
@@ -486,7 +486,7 @@ int32_t allocate_64_register2_w(uint32_t *addr)
     return reg2;
 }
 
-void set_register_state(int32_t reg, uint32_t *addr, int32_t d)
+void set_register_state(int32_t reg, uintptr_t addr, int32_t d)
 {
     last_access[reg] = dst;
     reg_content[reg] = addr;
@@ -494,7 +494,7 @@ void set_register_state(int32_t reg, uint32_t *addr, int32_t d)
     dirty[reg] = d;
 }
 
-void set_64_register_state(int32_t reg1, int32_t reg2, uint32_t *addr, int32_t d)
+void set_64_register_state(int32_t reg1, int32_t reg2, uintptr_t addr, int32_t d)
 {
     last_access[reg1] = dst;
     last_access[reg2] = dst;
@@ -510,7 +510,7 @@ void lock_register(int32_t reg)
 {
     free_register(reg);
     last_access[reg] = (precomp_instr *)0xFFFFFFFF;
-    reg_content[reg] = NULL;
+    reg_content[reg] = 0;
 }
 
 void unlock_register(int32_t reg)
@@ -551,7 +551,7 @@ void force_32(int32_t reg)
     }
 }
 
-void allocate_register_manually(int32_t reg, uint32_t *addr)
+void allocate_register_manually(int32_t reg, uintptr_t addr)
 {
     int32_t i;
 
@@ -633,7 +633,7 @@ void allocate_register_manually(int32_t reg, uint32_t *addr)
     dirty[reg] = 0;
     r64[reg] = -1;
 
-    if (addr != NULL)
+    if (addr != 0)
     {
         if (addr == r0 || addr == r0 + 1)
             xor_reg32_reg32(reg, reg);
@@ -642,7 +642,7 @@ void allocate_register_manually(int32_t reg, uint32_t *addr)
     }
 }
 
-void allocate_register_manually_w(int32_t reg, uint32_t *addr, int32_t load)
+void allocate_register_manually_w(int32_t reg, uintptr_t addr, int32_t load)
 {
     int32_t i;
 
@@ -728,7 +728,7 @@ void allocate_register_manually_w(int32_t reg, uint32_t *addr, int32_t load)
     dirty[reg] = 1;
     r64[reg] = -1;
 
-    if (addr != NULL && load)
+    if (addr != 0 && load)
     {
         if (addr == r0 || addr == r0 + 1)
             xor_reg32_reg32(reg, reg);
@@ -757,11 +757,10 @@ void build_wrapper(precomp_instr *instr, unsigned char *code, precomp_block *blo
 
     //--
     /*code[j++] = 0xB8;
-    *((uint32_t*)&code[j]) = (uint32_t)(fake);
-    j+=4;
-    code[j++] = 0xFF;
-    code[j++] = 0xD0;*/
-    //--
+    //*((uint32_t *)&code[j]) = (uint32_t)(fake);
+    //j+=4;
+    //code[j++] = 0xFF;
+    //code[j++] = 0xD0;*/
 
     code[j++] = 0x81;
     code[j++] = 0xEC;
@@ -771,11 +770,11 @@ void build_wrapper(precomp_instr *instr, unsigned char *code, precomp_block *blo
     code[j++] = 0x00;
 
     code[j++] = 0xA1;
-    *((uint32_t *)&code[j]) = (uint32_t)(&block->code);
+    *((uintptr_t *)&code[j]) = (uintptr_t)(&block->code);
     j += 4;
 
     code[j++] = 0x05;
-    *((uint32_t *)&code[j]) = (uint32_t)instr->local_addr;
+    *((uintptr_t *)&code[j]) = (uintptr_t)instr->local_addr;
     j += 4;
 
     code[j++] = 0x89;
@@ -788,7 +787,8 @@ void build_wrapper(precomp_instr *instr, unsigned char *code, precomp_block *blo
         {
             code[j++] = 0x8B;
             code[j++] = (i << 3) | 5;
-            *((uint32_t *)&code[j]) = (uint32_t)instr->reg_cache_infos.needed_registers[i];
+            // *((uint32_t *)&code[j]) = (uint32_t)instr->reg_cache_infos.needed_registers[i];
+            *((uintptr_t *)&code[j]) = (uintptr_t)instr->reg_cache_infos.needed_registers[i];
             j += 4;
         }
     }

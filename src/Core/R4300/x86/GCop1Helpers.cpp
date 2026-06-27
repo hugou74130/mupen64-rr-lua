@@ -21,8 +21,8 @@ static void patch_jump(uint32_t addr, uint32_t target)
 
 static void gencall_noret(void (*fn)())
 {
-    mov_m32_imm32((uint32_t *)(&PC), (uint32_t)(dst));
-    mov_reg32_imm32(EAX, (uint32_t)fn);
+    mov_m32_imm32((void *)(&PC), (uintptr_t)(dst));
+    mov_reg32_imm32(EAX, (uintptr_t)fn);
     call_reg32(EAX);
     ud2();
 }
