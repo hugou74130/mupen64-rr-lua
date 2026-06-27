@@ -13,7 +13,7 @@ void gentlbwi()
     gencallinterp((uintptr_t)TLBWI, 0);
     /*dst->local_addr = code_length;
     mov_m32_imm32((void *)(&PC), (uintptr_t)(dst));
-    mov_reg32_imm64(EAX, (uintptr_t)(TLBWI));
+    mov_reg32_imm32(EAX, (uintptr_t)(TLBWI));
     call_reg32(EAX);
     genupdate_system(0);*/
 }
@@ -23,7 +23,7 @@ void gentlbp()
     gencallinterp((uintptr_t)TLBP, 0);
     /*dst->local_addr = code_length;
     mov_m32_imm32((void *)(&PC), (uintptr_t)(dst));
-    mov_reg32_imm64(EAX, (uintptr_t)(TLBP));
+    mov_reg32_imm32(EAX, (uintptr_t)(TLBP));
     call_reg32(EAX);
     genupdate_system(0);*/
 }
@@ -33,7 +33,7 @@ void gentlbr()
     gencallinterp((uintptr_t)TLBR, 0);
     /*dst->local_addr = code_length;
     mov_m32_imm32((void *)(&PC), (uintptr_t)(dst));
-    mov_reg32_imm64(EAX, (uintptr_t)(TLBR));
+    mov_reg32_imm32(EAX, (uintptr_t)(TLBR));
     call_reg32(EAX);
     genupdate_system(0);*/
 }
@@ -44,9 +44,9 @@ void generet()
     /*dst->local_addr = code_length;
     mov_m32_imm32((void *)(&PC), (uintptr_t)(dst));
     genupdate_system(0);
-    mov_reg32_imm64(EAX, (uintptr_t)(ERET));
+    mov_reg32_imm32(EAX, (uintptr_t)(ERET));
     call_reg32(EAX);
-    mov_reg32_imm64(EAX, (uintptr_t)(jump_code));
+    mov_reg32_imm32(EAX, (uintptr_t)(jump_code));
     jmp_reg32(EAX);*/
 }
 

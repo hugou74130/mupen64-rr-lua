@@ -14,7 +14,7 @@
 
 void genbc1f_test()
 {
-    test_m32_imm32(&FCR31, 0x800000);
+    test_m32_imm32((uint32_t *)&FCR31, 0x800000);
     jne_rj(12);
     mov_m32_imm32((void *)(&branch_taken), (uintptr_t)1); // 10
     jmp_imm_short(10);                             // 2
@@ -80,7 +80,7 @@ void genbc1f_idle()
 
 void genbc1t_test()
 {
-    test_m32_imm32(&FCR31, 0x800000);
+    test_m32_imm32((uint32_t *)&FCR31, 0x800000);
     je_rj(12);
     mov_m32_imm32((void *)(&branch_taken), (uintptr_t)1); // 10
     jmp_imm_short(10);                             // 2
