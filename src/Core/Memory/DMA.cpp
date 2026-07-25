@@ -150,7 +150,7 @@ void dma_pi_write()
         return;
     }
 
-    i = (pi_register.pi_cart_addr_reg - 0x10000000) & 0x3FFFFFF;
+    i = (pi_register.pi_cart_addr_reg - 0x10000000) & 0x7FFFFFF;
     longueur = (i + longueur) > rom_size ? (rom_size - i) : longueur;
     longueur =
         (pi_register.pi_dram_addr_reg + longueur) > 0x7FFFFF ? (0x7FFFFF - pi_register.pi_dram_addr_reg) : longueur;
@@ -171,7 +171,7 @@ void dma_pi_write()
             uint32_t rdram_address2 = pi_register.pi_dram_addr_reg + i + 0xa0000000;
 
             ((unsigned char *)rdram)[(pi_register.pi_dram_addr_reg + i) ^ S8] =
-                rom[(((pi_register.pi_cart_addr_reg - 0x10000000) & 0x3FFFFFF) + i) ^ S8];
+                rom[(((pi_register.pi_cart_addr_reg - 0x10000000) & 0x7FFFFFF) + i) ^ S8];
 
             if (!invalid_code[rdram_address1 >> 12])
                 if (blocks[rdram_address1 >> 12]->block[(rdram_address1 & 0xFFF) / 4].ops != NOTCOMPILED)
@@ -187,7 +187,7 @@ void dma_pi_write()
         for (i = 0; i < longueur; i++)
         {
             ((unsigned char *)rdram)[(pi_register.pi_dram_addr_reg + i) ^ S8] =
-                rom[(((pi_register.pi_cart_addr_reg - 0x10000000) & 0x3FFFFFF) + i) ^ S8];
+                rom[(((pi_register.pi_cart_addr_reg - 0x10000000) & 0x7FFFFFF) + i) ^ S8];
         }
     }
 
